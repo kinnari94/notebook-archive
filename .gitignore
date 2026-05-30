@@ -1,5 +1,11 @@
 # Credentials — never commit
 .streamlit/secrets.toml
+.env.local
+
+# Next.js
+.next/
+out/
+node_modules/
 
 # Python
 __pycache__/
