@@ -1,7 +1,14 @@
 import { NextRequest } from 'next/server'
 import { spawn } from 'child_process'
 import { join } from 'path'
+import { createHash } from 'crypto'
 import { getDb, COLLECTIONS } from '@/lib/db'
+
+function contentHash(notebookId: string, category: string, description: string): string {
+  return createHash('sha1')
+    .update(`${notebookId}|${category}|${description.trim().toLowerCase()}`)
+    .digest('hex')
+}
 
 const ASK_SCRIPT = join(process.cwd(), 'scripts', 'nlm_ask.py')
 
@@ -132,6 +139,18 @@ export async function POST(req: NextRequest) {
 
         for (const nbId of notebook_ids as string[]) {
           for (const cat of categories as string[]) {
+            // Skip if this notebook+category combo already has data
+            const existing = await db.collection(COLLECTIONS.incidents).countDocuments({
+              source_notebook: nbId,
+              category: cat,
+            })
+            if (existing > 0) {
+              send({ msg: `  ⏭ [${cat}] already has ${existing} incidents for this notebook — skipped`, level: 'muted' })
+              done++
+              send({ progress: done, total })
+              continue
+            }
+
             const prompt = (PROMPTS[cat] || `Extract all ${cat} incidents.`) + PROMPT_SUFFIX
             send({ msg: `Querying [${cat}] from notebook ${nbId.slice(0, 8)}…`, level: 'info' })
 

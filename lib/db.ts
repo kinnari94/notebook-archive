@@ -3,9 +3,17 @@ import { Db, ObjectId } from 'mongodb'
 
 const DB_NAME = process.env.MONGODB_DB || 'bapaji_archive'
 
+let indexesEnsured = false
+
 export async function getDb(): Promise<Db> {
   const client = await clientPromise
-  return client.db(DB_NAME)
+  const db = client.db(DB_NAME)
+  if (!indexesEnsured) {
+    indexesEnsured = true
+    // Unique index prevents duplicate incidents even under concurrent runs
+    db.collection('incidents').createIndex({ contentHash: 1 }, { unique: true, sparse: true }).catch(() => {})
+  }
+  return db
 }
 
 export const COLLECTIONS = {
