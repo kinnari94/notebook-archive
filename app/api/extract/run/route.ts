@@ -4,9 +4,14 @@ import { join } from 'path'
 import { createHash } from 'crypto'
 import { getDb, COLLECTIONS } from '@/lib/db'
 
+// Normalize description for comparison — strips punctuation/spaces so minor LLM rephrasing still matches
+function normalize(text: string): string {
+  return text.toLowerCase().replace(/[^a-z0-9]/g, '').substring(0, 120)
+}
+
 function contentHash(notebookId: string, category: string, description: string): string {
   return createHash('sha1')
-    .update(`${notebookId}|${category}|${description.trim().toLowerCase()}`)
+    .update(`${notebookId}|${category}|${normalize(description)}`)
     .digest('hex')
 }
 
@@ -38,7 +43,6 @@ DATE_PRECISION: year|decade|period|approximate|unknown
 PEOPLE: <comma-separated names, or NONE>
 LOCATIONS: <comma-separated places, or NONE>
 CATEGORY: <category_key>
-ACCESS_TIER: <1|2|3>
 SOURCE_CHUNK: <exact short quote from source, max 150 chars>
 
 INCIDENT [2]
@@ -52,7 +56,6 @@ interface ParsedIncident {
   people: string[]
   locations: string[]
   category: string
-  access_tier: number
   source_chunk: string
   verified: boolean
   confidence: string
@@ -76,21 +79,19 @@ function parseYear(raw: string): number | undefined {
   return undefined
 }
 
-function parseResponse(text: string, category: string, tierDefault: number): ParsedIncident[] {
+function parseResponse(text: string, category: string): ParsedIncident[] {
   if (!text || text.includes('NO_INCIDENTS_FOUND')) return []
   const blocks = text.split(/INCIDENT\s*\[\d+\]/i).slice(1)
   return blocks.flatMap(block => {
     const desc = field(block, 'DESCRIPTION')
     if (!desc) return []
     const dateRaw = field(block, 'DATE')
-    const tierRaw = parseInt(field(block, 'ACCESS_TIER'))
     return [{
       description: desc,
       date: { year: parseYear(dateRaw), period: dateRaw, precision: field(block, 'DATE_PRECISION') || 'unknown' },
       people: parseList(field(block, 'PEOPLE')),
       locations: parseList(field(block, 'LOCATIONS')),
       category: field(block, 'CATEGORY') || category,
-      access_tier: isNaN(tierRaw) ? tierDefault : tierRaw,
       source_chunk: field(block, 'SOURCE_CHUNK'),
       verified: false,
       confidence: 'auto_extracted',
@@ -124,7 +125,7 @@ function evt(data: object): string {
 }
 
 export async function POST(req: NextRequest) {
-  const { notebook_ids, categories, access_tier = 1 } = await req.json()
+  const { notebook_ids, categories } = await req.json()
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -139,43 +140,48 @@ export async function POST(req: NextRequest) {
 
         for (const nbId of notebook_ids as string[]) {
           for (const cat of categories as string[]) {
-            // Skip if this notebook+category combo already has data
-            const existing = await db.collection(COLLECTIONS.incidents).countDocuments({
-              source_notebook: nbId,
-              category: cat,
-            })
-            if (existing > 0) {
-              send({ msg: `  ⏭ [${cat}] already has ${existing} incidents for this notebook — skipped`, level: 'muted' })
-              done++
-              send({ progress: done, total })
-              continue
-            }
-
             const prompt = (PROMPTS[cat] || `Extract all ${cat} incidents.`) + PROMPT_SUFFIX
             send({ msg: `Querying [${cat}] from notebook ${nbId.slice(0, 8)}…`, level: 'info' })
 
             try {
               const answer = await askNotebook(nbId, prompt, '')
-              const incidents = parseResponse(answer, cat, access_tier)
-              send({ msg: `  → ${incidents.length} incident(s) parsed`, level: incidents.length ? 'success' : 'muted' })
+              const incidents = parseResponse(answer, cat)
 
-              if (incidents.length > 0) {
-                const now = new Date()
-                const docs = incidents.map(inc => ({
-                  ...inc,
-                  extracted_at: now,
-                  source_notebook: nbId,
-                  source_type: 'notebooklm',
-                }))
-                await db.collection(COLLECTIONS.incidents).insertMany(docs)
-                await db.collection(COLLECTIONS.extractions).insertOne({
-                  notebook_id: nbId,
-                  category: cat,
-                  incidents_found: incidents.length,
-                  status: 'done',
-                  started_at: now,
-                })
-                send({ msg: `  ✓ Saved ${incidents.length} to MongoDB`, level: 'success' })
+              if (incidents.length === 0) {
+                send({ msg: `  → No points found`, level: 'muted' })
+              } else {
+                // Load all existing normalized descriptions for this notebook across all categories
+                const existingDocs = await db.collection(COLLECTIONS.incidents)
+                  .find({ source_notebook: nbId }, { projection: { description: 1 } })
+                  .toArray()
+                const existingNorms = new Set(existingDocs.map(d => normalize(d.description || '')))
+
+                // Filter to only genuinely new points
+                const newIncidents = incidents.filter(inc => !existingNorms.has(normalize(inc.description)))
+                const skipped = incidents.length - newIncidents.length
+
+                if (newIncidents.length === 0) {
+                  send({ msg: `  → No new points — all ${skipped} already extracted`, level: 'muted' })
+                } else {
+                  const now = new Date()
+                  const docs = newIncidents.map(inc => ({
+                    ...inc,
+                    contentHash: contentHash(nbId, cat, inc.description),
+                    extracted_at: now,
+                    source_notebook: nbId,
+                    source_type: 'notebooklm',
+                  }))
+                  await db.collection(COLLECTIONS.incidents).insertMany(docs, { ordered: false }).catch(() => {})
+                  const msg = skipped > 0
+                    ? `  ✓ ${newIncidents.length} new point(s) saved · ${skipped} already existed`
+                    : `  ✓ ${newIncidents.length} point(s) saved`
+                  send({ msg, level: 'success' })
+                  await db.collection(COLLECTIONS.extractions).insertOne({
+                    notebook_id: nbId, category: cat,
+                    points_saved: newIncidents.length, points_skipped: skipped,
+                    status: 'done', started_at: now,
+                  })
+                }
               }
             } catch (e) {
               send({ msg: `  ✗ ${e}`, level: 'error' })

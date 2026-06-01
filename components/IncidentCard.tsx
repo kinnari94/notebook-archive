@@ -1,4 +1,4 @@
-import { MapPin, Users, Calendar, Shield } from 'lucide-react'
+import { MapPin, Users, Calendar } from 'lucide-react'
 
 const CATEGORY_META: Record<string, { color: string; bg: string; icon: string }> = {
   daily_dateline:       { color: 'text-blue-700',   bg: 'bg-blue-50',   icon: '📅' },
@@ -24,15 +24,12 @@ interface Incident {
   people?: string[]
   locations?: string[]
   source_chunk?: string
-  access_tier?: number
   verified?: boolean
   extracted_at?: string
 }
 
 export default function IncidentCard({ incident }: { incident: Incident }) {
   const meta = CATEGORY_META[incident.category || ''] ?? { color: 'text-gray-700', bg: 'bg-gray-50', icon: '📌' }
-  const tierColors = ['', 'bg-emerald-100 text-emerald-700', 'bg-amber-100 text-amber-700', 'bg-red-100 text-red-700']
-  const tierLabels = ['', 'Public', 'Controlled', 'Restricted']
 
   return (
     <div className="bg-white rounded-2xl border border-border p-5 hover:shadow-md transition-shadow">
@@ -42,12 +39,6 @@ export default function IncidentCard({ incident }: { incident: Incident }) {
           {(incident.category || 'unknown').replace(/_/g, ' ')}
         </span>
         <div className="flex items-center gap-2 shrink-0">
-          {incident.access_tier && (
-            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${tierColors[incident.access_tier] || tierColors[1]}`}>
-              <Shield className="w-3 h-3 inline mr-1" />
-              {tierLabels[incident.access_tier] || 'T' + incident.access_tier}
-            </span>
-          )}
           {incident.date?.year && (
             <span className="flex items-center gap-1 text-xs text-muted">
               <Calendar className="w-3 h-3" />

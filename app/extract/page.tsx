@@ -36,7 +36,6 @@ export default function Extract() {
   const [nbError, setNbError]             = useState<string | null>(null)
   const [selectedNbs, setSelectedNbs]     = useState<string[]>([])
   const [selectedCats, setSelectedCats]   = useState<string[]>([])
-  const [tier, setTier]                   = useState(1)
   const [running, setRunning]             = useState(false)
   const [logs, setLogs]                   = useState<LogLine[]>([])
   const [progress, setProgress]           = useState<{ done: number; total: number } | null>(null)
@@ -99,7 +98,7 @@ export default function Extract() {
       const res = await fetch('/api/extract/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ notebook_ids: selectedNbs, categories: selectedCats, access_tier: tier }),
+        body: JSON.stringify({ notebook_ids: selectedNbs, categories: selectedCats }),
       })
       const reader = res.body!.getReader()
       const dec = new TextDecoder()
@@ -293,16 +292,8 @@ export default function Extract() {
 
           {/* Run */}
           <div className="bg-white border border-border rounded-2xl p-6 mb-6">
-            <h2 className="font-serif text-lg font-bold text-ink mb-4">③ Access Tier & Run</h2>
+            <h2 className="font-serif text-lg font-bold text-ink mb-4">③ Run</h2>
             <div className="flex flex-wrap items-center gap-6">
-              <div className="flex gap-2">
-                {[1, 2, 3].map(t => (
-                  <button key={t} onClick={() => setTier(t)}
-                    className={`px-4 py-2 rounded-xl border text-sm font-medium transition-all ${tier === t ? 'bg-forest text-white border-forest' : 'bg-cream border-border text-ink hover:border-forest/50'}`}>
-                    {t === 1 ? '🟢 Public' : t === 2 ? '🟡 Controlled' : '🔴 Restricted'}
-                  </button>
-                ))}
-              </div>
               <button onClick={runExtraction}
                 disabled={running || !selectedNbs.length || !selectedCats.length}
                 className="ml-auto flex items-center gap-2 px-7 py-3 bg-ember text-white rounded-2xl font-semibold text-sm hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">

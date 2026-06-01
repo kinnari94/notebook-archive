@@ -18,6 +18,7 @@ export async function getDb(): Promise<Db> {
 
 export const COLLECTIONS = {
   incidents: 'incidents',
+  documentary_stories: 'documentary_stories',
   people: 'people',
   locations: 'locations',
   sources: 'sources',
@@ -80,7 +81,6 @@ export interface IncidentQuery {
   location?: string
   year_from?: number
   year_to?: number
-  access_tier_max?: number
   search_text?: string
   limit?: number
   skip?: number
@@ -88,9 +88,7 @@ export interface IncidentQuery {
 
 export async function queryIncidents(q: IncidentQuery) {
   const db = await getDb()
-  const filter: Record<string, unknown> = {
-    access_tier: { $lte: q.access_tier_max ?? 3 },
-  }
+  const filter: Record<string, unknown> = {}
   if (q.category) filter.category = q.category
   if (q.person) filter.people = { $regex: q.person, $options: 'i' }
   if (q.location) filter.locations = { $regex: q.location, $options: 'i' }

@@ -10,7 +10,6 @@ export async function GET(req: NextRequest) {
       location: s.get('location') || undefined,
       year_from: s.get('year_from') ? Number(s.get('year_from')) : undefined,
       year_to: s.get('year_to') ? Number(s.get('year_to')) : undefined,
-      access_tier_max: s.get('tier') ? Number(s.get('tier')) : 3,
       search_text: s.get('q') || undefined,
       limit: s.get('limit') ? Number(s.get('limit')) : 20,
       skip: s.get('skip') ? Number(s.get('skip')) : 0,
