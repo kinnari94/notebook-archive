@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server'
+import { getServerSession } from 'next-auth'
 import { spawn } from 'child_process'
 import { join } from 'path'
 import { createHash } from 'crypto'
@@ -94,11 +95,15 @@ function parseResponse(text: string, category: string): ParsedIncident[] {
   })
 }
 
-function askNotebook(notebookId: string, prompt: string, nlmCookie: string): Promise<string> {
+function askNotebook(notebookId: string, prompt: string, nlmCookie: string, googleAccessToken?: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    const proc = spawn('python3', [ASK_SCRIPT, notebookId, prompt], {
+    const proc = spawn(PYTHON, [ASK_SCRIPT, notebookId, prompt], {
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env, NLM_COOKIE: nlmCookie },
+      env: {
+        ...process.env,
+        NLM_COOKIE: nlmCookie,
+        ...(googleAccessToken ? { GOOGLE_ACCESS_TOKEN: googleAccessToken } : {}),
+      },
     })
     let stdout = ''
     proc.stdout.on('data', (d: Buffer) => { stdout += d.toString() })
@@ -121,6 +126,8 @@ function evt(data: object): string {
 
 export async function POST(req: NextRequest) {
   const { notebook_ids, categories } = await req.json()
+  const session = await getServerSession()
+  const googleAccessToken = (session as any)?.access_token as string | undefined
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -139,7 +146,7 @@ export async function POST(req: NextRequest) {
             send({ msg: `Querying [${cat}] from notebook ${nbId.slice(0, 8)}…`, level: 'info' })
 
             try {
-              const answer = await askNotebook(nbId, prompt, '')
+              const answer = await askNotebook(nbId, prompt, '', googleAccessToken)
               const incidents = parseResponse(answer, cat)
 
               if (incidents.length === 0) {

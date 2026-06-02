@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { useSession } from 'next-auth/react'
 import { RefreshCw, Play, CheckCircle, AlertCircle, BookOpen, Loader2, LogOut } from 'lucide-react'
 
 const CATEGORIES = [
@@ -22,6 +23,9 @@ interface Notebook { id: string; title: string; source_count: number }
 interface LogLine  { msg: string; level: string; ts: string }
 
 export default function Extract() {
+  const { data: session } = useSession()
+  const isGoogleSession = !!(session as any)?.access_token
+
   // NotebookLM connection state
   const [nlmConnected, setNlmConnected]   = useState(false)
   const [nlmChecking, setNlmChecking]     = useState(true)
@@ -136,8 +140,8 @@ export default function Extract() {
         <p className="text-muted text-sm mt-1">Pull incidents from NotebookLM into the archive</p>
       </div>
 
-      {/* NotebookLM login form */}
-      {!nlmChecking && !nlmConnected && (
+      {/* NotebookLM login form — hidden when user is signed in via Google */}
+      {!nlmChecking && !nlmConnected && !isGoogleSession && (
         <div className="bg-white border border-border rounded-2xl p-8 mb-8 max-w-md">
           <div className="flex items-center gap-3 mb-6">
             <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
@@ -213,7 +217,9 @@ export default function Extract() {
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2">
               <CheckCircle className="w-4 h-4 text-emerald-600" />
-              <span className="text-sm text-emerald-700 font-medium">NotebookLM connected</span>
+              <span className="text-sm text-emerald-700 font-medium">
+                {isGoogleSession ? `Connected as ${session?.user?.email}` : 'NotebookLM connected'}
+              </span>
             </div>
             <div className="flex items-center gap-2">
               <button onClick={loadNotebooks} disabled={nbLoading}

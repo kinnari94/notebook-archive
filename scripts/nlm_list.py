@@ -1,8 +1,9 @@
 """List notebooks via notebooklm-py. Prints JSON to stdout.
-Cookie source priority:
-  1. NLM_COOKIE env var  (per-user session from web app)
-  2. NOTEBOOKLM_AUTH_JSON env var  (server-level, for hosting)
-  3. ~/.notebooklm/storage_state.json  (local dev via notebooklm login)
+Auth source priority:
+  1. GOOGLE_ACCESS_TOKEN env var  (from NextAuth Google OAuth session)
+  2. NLM_COOKIE env var           (per-user cookie string)
+  3. NOTEBOOKLM_AUTH_JSON env var (server-level hosting)
+  4. ~/.notebooklm/storage_state.json (local dev via notebooklm login)
 """
 import asyncio
 import json
@@ -19,10 +20,13 @@ async def main():
         sys.exit(1)
 
     try:
-        nlm_cookie = os.environ.get("NLM_COOKIE", "").strip()
+        access_token = os.environ.get("GOOGLE_ACCESS_TOKEN", "").strip()
+        nlm_cookie   = os.environ.get("NLM_COOKIE", "").strip()
 
-        if nlm_cookie:
-            # Per-user cookie string — build AuthTokens directly
+        if access_token:
+            async with NotebookLMClient(access_token=access_token) as client:
+                notebooks = await client.notebooks.list()
+        elif nlm_cookie:
             cookies_dict = {}
             for part in nlm_cookie.split(";"):
                 part = part.strip()
@@ -34,7 +38,6 @@ async def main():
             async with NotebookLMClient(auth) as client:
                 notebooks = await client.notebooks.list()
         else:
-            # Fall back to notebooklm login storage
             async with await NotebookLMClient.from_storage() as client:
                 notebooks = await client.notebooks.list()
 

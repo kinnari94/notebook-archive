@@ -1,6 +1,9 @@
 """Ask a question to a NotebookLM notebook.
 Usage: nlm_ask.py <notebook_id> <prompt>
-Cookie source: NLM_COOKIE env var → NOTEBOOKLM_AUTH_JSON → storage_state.json
+Auth source priority:
+  1. GOOGLE_ACCESS_TOKEN env var  (from NextAuth Google OAuth session)
+  2. NLM_COOKIE env var           (per-user cookie string)
+  3. ~/.notebooklm/storage_state.json (local dev)
 """
 import asyncio
 import json
@@ -24,9 +27,13 @@ async def main():
         sys.exit(1)
 
     try:
-        nlm_cookie = os.environ.get("NLM_COOKIE", "").strip()
+        access_token = os.environ.get("GOOGLE_ACCESS_TOKEN", "").strip()
+        nlm_cookie   = os.environ.get("NLM_COOKIE", "").strip()
 
-        if nlm_cookie:
+        if access_token:
+            async with NotebookLMClient(access_token=access_token) as client:
+                result = await client.chat.ask(notebook_id, prompt)
+        elif nlm_cookie:
             cookies_dict = {}
             for part in nlm_cookie.split(";"):
                 part = part.strip()
