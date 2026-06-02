@@ -4,14 +4,9 @@ import { join } from 'path'
 import { createHash } from 'crypto'
 import { getDb, COLLECTIONS } from '@/lib/db'
 
-// Normalize description for comparison — strips punctuation/spaces so minor LLM rephrasing still matches
-function normalize(text: string): string {
-  return text.toLowerCase().replace(/[^a-z0-9]/g, '').substring(0, 120)
-}
-
 function contentHash(notebookId: string, category: string, description: string): string {
   return createHash('sha1')
-    .update(`${notebookId}|${category}|${normalize(description)}`)
+    .update(`${notebookId}|${category}|${description.trim().toLowerCase()}`)
     .digest('hex')
 }
 
@@ -150,35 +145,30 @@ export async function POST(req: NextRequest) {
               if (incidents.length === 0) {
                 send({ msg: `  → No points found`, level: 'muted' })
               } else {
-                // Load all existing normalized descriptions for this notebook across all categories
-                const existingDocs = await db.collection(COLLECTIONS.incidents)
-                  .find({ source_notebook: nbId }, { projection: { description: 1 } })
-                  .toArray()
-                const existingNorms = new Set(existingDocs.map(d => normalize(d.description || '')))
+                const now = new Date()
+                let saved = 0, skipped = 0
 
-                // Filter to only genuinely new points
-                const newIncidents = incidents.filter(inc => !existingNorms.has(normalize(inc.description)))
-                const skipped = incidents.length - newIncidents.length
+                for (const inc of incidents) {
+                  const hash = contentHash(nbId, cat, inc.description)
+                  const result = await db.collection(COLLECTIONS.incidents).updateOne(
+                    { contentHash: hash },
+                    { $setOnInsert: { ...inc, contentHash: hash, extracted_at: now, source_notebook: nbId, source_type: 'notebooklm' } },
+                    { upsert: true }
+                  )
+                  if (result.upsertedCount > 0) saved++
+                  else skipped++
+                }
 
-                if (newIncidents.length === 0) {
+                if (saved === 0) {
                   send({ msg: `  → No new points — all ${skipped} already extracted`, level: 'muted' })
                 } else {
-                  const now = new Date()
-                  const docs = newIncidents.map(inc => ({
-                    ...inc,
-                    contentHash: contentHash(nbId, cat, inc.description),
-                    extracted_at: now,
-                    source_notebook: nbId,
-                    source_type: 'notebooklm',
-                  }))
-                  await db.collection(COLLECTIONS.incidents).insertMany(docs, { ordered: false }).catch(() => {})
                   const msg = skipped > 0
-                    ? `  ✓ ${newIncidents.length} new point(s) saved · ${skipped} already existed`
-                    : `  ✓ ${newIncidents.length} point(s) saved`
+                    ? `  ✓ ${saved} new point(s) saved · ${skipped} already existed`
+                    : `  ✓ ${saved} point(s) saved`
                   send({ msg, level: 'success' })
                   await db.collection(COLLECTIONS.extractions).insertOne({
                     notebook_id: nbId, category: cat,
-                    points_saved: newIncidents.length, points_skipped: skipped,
+                    points_saved: saved, points_skipped: skipped,
                     status: 'done', started_at: now,
                   })
                 }
