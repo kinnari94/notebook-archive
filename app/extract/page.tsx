@@ -19,6 +19,24 @@ const CATEGORIES = [
   { key: 'artifacts',               label: 'Artifacts',             icon: '📿' },
 ]
 
+const BK_CATEGORIES = [
+  { key: 'bk_devotion',          label: 'Devotion to PKD',           icon: '🙏' },
+  { key: 'bk_bhakti',            label: 'Bhakti',                    icon: '❤️' },
+  { key: 'bk_satsang',           label: 'Satsang',                   icon: '📿' },
+  { key: 'bk_personal_guidance', label: 'Personal Guidance / Agna',  icon: '🧭' },
+  { key: 'bk_visionary',         label: 'Visionary / Infrastructure', icon: '🏛️' },
+  { key: 'bk_guiding_youth',     label: 'Guiding Youth',             icon: '🌟' },
+  { key: 'bk_dasha',             label: 'Dasha / Inner State',       icon: '✨' },
+  { key: 'bk_seva',              label: 'Seva',                      icon: '🌱' },
+  { key: 'bk_children_legacy',   label: 'Children & Legacy',         icon: '👶' },
+  { key: 'bk_tributes',          label: 'Tributes / External',       icon: '🏆' },
+  { key: 'bk_satsang_deep',      label: 'Deep Satsang Analysis',     icon: '🔍' },
+]
+
+function isBKNotebook(title: string): boolean {
+  return /bapa\s*katha/i.test(title)
+}
+
 interface Notebook { id: string; title: string; source_count: number }
 interface LogLine  { msg: string; level: string; ts: string }
 
@@ -45,20 +63,34 @@ export default function Extract() {
   const [progress, setProgress]           = useState<{ done: number; total: number } | null>(null)
   const logsRef = useRef<HTMLDivElement>(null)
 
+  // Derived: which selected notebooks are Bapa Katha
+  const bkIds = selectedNbs.filter(id => {
+    const nb = notebooks.find(n => n.id === id)
+    return nb ? isBKNotebook(nb.title) : false
+  })
+  const hasBK      = bkIds.length > 0
+  const hasStandard = selectedNbs.length > bkIds.length
+  const activeCats  = hasBK ? BK_CATEGORIES : CATEGORIES
+
   useEffect(() => {
     logsRef.current?.scrollTo({ top: logsRef.current.scrollHeight, behavior: 'smooth' })
   }, [logs])
 
-  // Check if NotebookLM is already authenticated
+  // Auto-connect when Google session is available
   useEffect(() => {
     fetch('/api/nlm-connect').then(r => r.json()).then(d => {
       setNlmChecking(false)
-      if (d.connected) {
-        setNlmConnected(true)
-        loadNotebooks()
-      }
+      if (d.connected) { setNlmConnected(true); loadNotebooks() }
     })
   }, [])
+
+  // Also auto-connect once Google session resolves (if not yet connected)
+  useEffect(() => {
+    if (isGoogleSession && !nlmConnected && !nlmChecking) {
+      setNlmConnected(true)
+      loadNotebooks()
+    }
+  }, [isGoogleSession, nlmConnected, nlmChecking])
 
   const loadNotebooks = useCallback(async () => {
     setNbLoading(true); setNbError(null)
@@ -83,13 +115,8 @@ export default function Extract() {
         body: JSON.stringify({ email: nlmEmail, password: nlmPassword }),
       })
       const d = await r.json()
-      if (d.ok) {
-        setNlmConnected(true)
-        setNlmPassword('')
-        loadNotebooks()
-      } else {
-        setNlmError(d.error || 'Login failed')
-      }
+      if (d.ok) { setNlmConnected(true); setNlmPassword(''); loadNotebooks() }
+      else setNlmError(d.error || 'Login failed')
     } finally {
       setNlmLogging(false)
     }
@@ -102,7 +129,11 @@ export default function Extract() {
       const res = await fetch('/api/extract/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ notebook_ids: selectedNbs, categories: selectedCats }),
+        body: JSON.stringify({
+          notebook_ids: selectedNbs,
+          categories:   selectedCats,
+          bapa_katha_ids: bkIds,
+        }),
       })
       const reader = res.body!.getReader()
       const dec = new TextDecoder()
@@ -126,8 +157,11 @@ export default function Extract() {
     } finally { setRunning(false) }
   }
 
-  const toggleNb  = (id: string) => setSelectedNbs(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id])
-  const toggleCat = (k: string)  => setSelectedCats(p => p.includes(k) ? p.filter(x => x !== k) : [...p, k])
+  const toggleNb  = (id: string) => {
+    setSelectedNbs(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id])
+    setSelectedCats([]) // reset categories when notebook selection changes
+  }
+  const toggleCat = (k: string) => setSelectedCats(p => p.includes(k) ? p.filter(x => x !== k) : [...p, k])
 
   const logColor: Record<string, string> = {
     info: 'text-green-300', error: 'text-red-400', success: 'text-mint', muted: 'text-gray-500',
@@ -156,62 +190,37 @@ export default function Extract() {
           <form onSubmit={connectNotebookLM} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-ink mb-1.5">Email</label>
-              <input
-                type="email"
-                value={nlmEmail}
-                onChange={e => setNlmEmail(e.target.value)}
-                required
-                autoFocus
-                placeholder="you@gmail.com"
-                className="w-full px-4 py-2.5 rounded-xl border border-border bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-              />
+              <input type="email" value={nlmEmail} onChange={e => setNlmEmail(e.target.value)}
+                required autoFocus placeholder="you@gmail.com"
+                className="w-full px-4 py-2.5 rounded-xl border border-border bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
             </div>
             <div>
               <label className="block text-sm font-medium text-ink mb-1.5">Password</label>
-              <input
-                type="password"
-                value={nlmPassword}
-                onChange={e => setNlmPassword(e.target.value)}
-                required
-                placeholder="••••••••"
-                className="w-full px-4 py-2.5 rounded-xl border border-border bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-              />
+              <input type="password" value={nlmPassword} onChange={e => setNlmPassword(e.target.value)}
+                required placeholder="••••••••"
+                className="w-full px-4 py-2.5 rounded-xl border border-border bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
             </div>
-
             {nlmError && (
               <div className="flex items-start gap-2 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">
-                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                {nlmError}
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />{nlmError}
               </div>
             )}
-
-            <button
-              type="submit"
-              disabled={nlmLogging}
-              className="w-full flex items-center justify-center gap-2 py-2.5 bg-blue-600 text-white rounded-xl font-semibold text-sm hover:bg-blue-700 disabled:opacity-50 transition-colors"
-            >
+            <button type="submit" disabled={nlmLogging}
+              className="w-full flex items-center justify-center gap-2 py-2.5 bg-blue-600 text-white rounded-xl font-semibold text-sm hover:bg-blue-700 disabled:opacity-50 transition-colors">
               {nlmLogging ? <Loader2 className="w-4 h-4 animate-spin" /> : <BookOpen className="w-4 h-4" />}
               {nlmLogging ? 'Signing in…' : 'Sign in to NotebookLM'}
             </button>
           </form>
-
-          {nlmLogging && (
-            <p className="text-xs text-muted mt-3 text-center">
-              Authenticating with Google — this may take up to 30 seconds…
-            </p>
-          )}
+          {nlmLogging && <p className="text-xs text-muted mt-3 text-center">Authenticating — this may take up to 30 seconds…</p>}
         </div>
       )}
 
-      {/* Checking state */}
       {nlmChecking && (
         <div className="flex items-center gap-3 text-muted text-sm mb-8">
-          <Loader2 className="w-4 h-4 animate-spin" />
-          Checking NotebookLM connection…
+          <Loader2 className="w-4 h-4 animate-spin" />Checking NotebookLM connection…
         </div>
       )}
 
-      {/* Connected */}
       {nlmConnected && (
         <>
           <div className="flex items-center justify-between mb-6">
@@ -224,21 +233,18 @@ export default function Extract() {
             <div className="flex items-center gap-2">
               <button onClick={loadNotebooks} disabled={nbLoading}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-muted hover:text-ink border border-border rounded-lg bg-white hover:bg-cream transition-colors">
-                <RefreshCw className={`w-3.5 h-3.5 ${nbLoading ? 'animate-spin' : ''}`} />
-                Refresh
+                <RefreshCw className={`w-3.5 h-3.5 ${nbLoading ? 'animate-spin' : ''}`} />Refresh
               </button>
               <button onClick={() => setNlmConnected(false)}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-muted hover:text-ink border border-border rounded-lg bg-white hover:bg-cream transition-colors">
-                <LogOut className="w-3.5 h-3.5" />
-                Disconnect
+                <LogOut className="w-3.5 h-3.5" />Disconnect
               </button>
             </div>
           </div>
 
           {nbError && (
             <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-4 py-3 mb-6 text-sm text-red-600">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              {nbError}
+              <AlertCircle className="w-4 h-4 shrink-0" />{nbError}
             </div>
           )}
 
@@ -257,36 +263,54 @@ export default function Extract() {
                 </div>
               ) : (
                 <div className="space-y-2 max-h-72 overflow-y-auto">
-                  {notebooks.map(nb => (
-                    <button key={nb.id} onClick={() => toggleNb(nb.id)}
-                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border text-left transition-all ${
-                        selectedNbs.includes(nb.id) ? 'border-forest bg-forest/5' : 'border-border bg-cream hover:border-forest/50'
-                      }`}>
-                      <div className={`w-4 h-4 rounded border-2 shrink-0 ${selectedNbs.includes(nb.id) ? 'bg-forest border-forest' : 'border-border'}`} />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-ink truncate">{nb.title}</p>
-                        <p className="text-xs text-muted">{nb.source_count} sources</p>
-                      </div>
-                    </button>
-                  ))}
+                  {notebooks.map(nb => {
+                    const bk = isBKNotebook(nb.title)
+                    return (
+                      <button key={nb.id} onClick={() => toggleNb(nb.id)}
+                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border text-left transition-all ${
+                          selectedNbs.includes(nb.id) ? 'border-forest bg-forest/5' : 'border-border bg-cream hover:border-forest/50'
+                        }`}>
+                        <div className={`w-4 h-4 rounded border-2 shrink-0 ${selectedNbs.includes(nb.id) ? 'bg-forest border-forest' : 'border-border'}`} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-ink truncate">{nb.title}</p>
+                          <p className="text-xs text-muted">
+                            {nb.source_count} sources{bk ? ' · Bapa Katha' : ''}
+                          </p>
+                        </div>
+                        {bk && <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full shrink-0">BK</span>}
+                      </button>
+                    )
+                  })}
                 </div>
+              )}
+              {hasStandard && hasBK && (
+                <p className="text-xs text-amber-600 mt-3 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                  Mixed selection: Bapa Katha categories will apply to BK notebooks; standard categories to others.
+                </p>
               )}
             </div>
 
             {/* Categories */}
             <div className="bg-white border border-border rounded-2xl p-6">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="font-serif text-lg font-bold text-ink">② Categories</h2>
+                <div>
+                  <h2 className="font-serif text-lg font-bold text-ink">② Categories</h2>
+                  {hasBK && <p className="text-xs text-amber-700 mt-0.5">Bapa Katha mode</p>}
+                </div>
                 <div className="flex gap-2">
-                  <button onClick={() => setSelectedCats(CATEGORIES.map(c => c.key))} className="text-xs px-2.5 py-1 bg-cream border border-border rounded-lg hover:bg-border">All</button>
-                  <button onClick={() => setSelectedCats([])} className="text-xs px-2.5 py-1 bg-cream border border-border rounded-lg hover:bg-border">Clear</button>
+                  <button onClick={() => setSelectedCats(activeCats.map(c => c.key))}
+                    className="text-xs px-2.5 py-1 bg-cream border border-border rounded-lg hover:bg-border">All</button>
+                  <button onClick={() => setSelectedCats([])}
+                    className="text-xs px-2.5 py-1 bg-cream border border-border rounded-lg hover:bg-border">Clear</button>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-2">
-                {CATEGORIES.map(({ key, label, icon }) => (
+                {activeCats.map(({ key, label, icon }) => (
                   <button key={key} onClick={() => toggleCat(key)}
                     className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-left transition-all ${
-                      selectedCats.includes(key) ? 'border-ember bg-ember/10 text-ember font-medium' : 'border-border bg-cream text-ink hover:border-ember/50'
+                      selectedCats.includes(key)
+                        ? hasBK ? 'border-amber-500 bg-amber-50 text-amber-800 font-medium' : 'border-ember bg-ember/10 text-ember font-medium'
+                        : 'border-border bg-cream text-ink hover:border-ember/50'
                     }`}>
                     <span>{icon}</span>
                     <span className="truncate text-xs">{label}</span>

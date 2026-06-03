@@ -12,12 +12,14 @@ export async function getDb(): Promise<Db> {
     indexesEnsured = true
     // Unique index prevents duplicate incidents even under concurrent runs
     db.collection('incidents').createIndex({ contentHash: 1 }, { unique: true, sparse: true }).catch(() => {})
+    db.collection('bk_stories').createIndex({ contentHash: 1 }, { unique: true, sparse: true }).catch(() => {})
   }
   return db
 }
 
 export const COLLECTIONS = {
   incidents: 'incidents',
+  bk_stories: 'bk_stories',
   documentary_stories: 'documentary_stories',
   people: 'people',
   locations: 'locations',
@@ -84,36 +86,105 @@ export interface IncidentQuery {
   search_text?: string
   limit?: number
   skip?: number
+  source?: 'standard' | 'bapa_katha' | 'all'
+}
+
+function normalizeBKStory(doc: Record<string, unknown>): Record<string, unknown> {
+  return {
+    ...doc,
+    _id: String(doc._id),
+    source_type: 'bapa_katha',
+    description: (doc.summary as string) || (doc.story_title as string) || '',
+    date: { period: (doc.time_life_stage as string) || 'not specified' },
+    people: (doc.person as string) ? [doc.person as string] : [],
+    locations: (doc.location as string) && (doc.location as string) !== 'not specified'
+      ? [doc.location as string] : [],
+  }
 }
 
 export async function queryIncidents(q: IncidentQuery) {
   const db = await getDb()
-  const filter: Record<string, unknown> = {}
-  if (q.category) filter.category = q.category
-  if (q.person) filter.people = { $regex: q.person, $options: 'i' }
-  if (q.location) filter.locations = { $regex: q.location, $options: 'i' }
+  const source = q.source || 'all'
+  const limit = q.limit ?? 20
+  const skip  = q.skip  ?? 0
+
+  // Build filter for incidents collection (skip bk_ categories)
+  const incFilter: Record<string, unknown> = {}
+  if (q.category && !q.category.startsWith('bk_')) incFilter.category = q.category
+  if (q.category?.startsWith('bk_') && source !== 'bapa_katha') {
+    // category is a BK category but we're in standard/all mode — no standard incidents match
+    if (source === 'standard') return { total: 0, incidents: [] }
+  }
+  if (q.person)   incFilter.people    = { $regex: q.person,   $options: 'i' }
+  if (q.location) incFilter.locations = { $regex: q.location, $options: 'i' }
   if (q.year_from || q.year_to) {
     const yr: Record<string, number> = {}
     if (q.year_from) yr.$gte = q.year_from
-    if (q.year_to) yr.$lte = q.year_to
-    filter['date.year'] = yr
+    if (q.year_to)   yr.$lte = q.year_to
+    incFilter['date.year'] = yr
+  }
+  if (q.search_text) incFilter.$text = { $search: q.search_text }
+
+  // Build filter for bk_stories collection
+  const bkFilter: Record<string, unknown> = {}
+  if (q.category?.startsWith('bk_')) bkFilter.category = q.category
+  if (q.person) {
+    bkFilter.$or = [
+      { person:       { $regex: q.person, $options: 'i' } },
+      { what_happened:{ $regex: q.person, $options: 'i' } },
+    ]
+  }
+  if (q.location) bkFilter.location = { $regex: q.location, $options: 'i' }
+  if (q.year_from === q.year_to && q.year_from) {
+    // Exact year — filter BK stories whose time_life_stage contains that year
+    bkFilter.time_life_stage = { $regex: `\\b${q.year_from}\\b` }
   }
   if (q.search_text) {
-    filter.$text = { $search: q.search_text }
+    bkFilter.$or = [
+      { story_title:  { $regex: q.search_text, $options: 'i' } },
+      { summary:      { $regex: q.search_text, $options: 'i' } },
+      { what_happened:{ $regex: q.search_text, $options: 'i' } },
+    ]
   }
 
   try {
-    const total = await db.collection(COLLECTIONS.incidents).countDocuments(filter)
-    const docs = await db.collection(COLLECTIONS.incidents)
-      .find(filter)
-      .sort({ 'date.year': 1 })
-      .skip(q.skip ?? 0)
-      .limit(q.limit ?? 20)
-      .toArray()
-    return {
-      total,
-      incidents: docs.map(d => ({ ...d, _id: d._id.toString() })),
+    if (source === 'standard') {
+      const total = await db.collection(COLLECTIONS.incidents).countDocuments(incFilter)
+      const docs  = await db.collection(COLLECTIONS.incidents)
+        .find(incFilter).sort({ 'date.year': 1 }).skip(skip).limit(limit).toArray()
+      return { total, incidents: docs.map(d => ({ ...d, _id: d._id.toString() })) }
     }
+
+    if (source === 'bapa_katha') {
+      const total = await db.collection(COLLECTIONS.bk_stories).countDocuments(bkFilter)
+      const docs  = await db.collection(COLLECTIONS.bk_stories)
+        .find(bkFilter).sort({ extracted_at: -1 }).skip(skip).limit(limit).toArray()
+      return { total, incidents: docs.map(d => normalizeBKStory(d as Record<string, unknown>)) }
+    }
+
+    // source === 'all'
+    const [incTotal, bkTotal] = await Promise.all([
+      db.collection(COLLECTIONS.incidents).countDocuments(incFilter),
+      db.collection(COLLECTIONS.bk_stories).countDocuments(bkFilter),
+    ])
+    const total = incTotal + bkTotal
+    const incidents: unknown[] = []
+
+    if (skip < incTotal) {
+      const incDocs = await db.collection(COLLECTIONS.incidents)
+        .find(incFilter).sort({ 'date.year': 1 }).skip(skip).limit(limit).toArray()
+      incidents.push(...incDocs.map(d => ({ ...d, _id: d._id.toString() })))
+    }
+
+    const bkSkip  = Math.max(0, skip - incTotal)
+    const bkLimit = limit - incidents.length
+    if (bkLimit > 0) {
+      const bkDocs = await db.collection(COLLECTIONS.bk_stories)
+        .find(bkFilter).sort({ extracted_at: -1 }).skip(bkSkip).limit(bkLimit).toArray()
+      incidents.push(...bkDocs.map(d => normalizeBKStory(d as Record<string, unknown>)))
+    }
+
+    return { total, incidents }
   } catch {
     return { total: 0, incidents: [] }
   }
@@ -160,30 +231,58 @@ export async function getAllLocations(limit = 200) {
   }
 }
 
-export async function getTimelineData() {
+export async function getTimelineData(source: 'standard' | 'bapa_katha' | 'all' = 'all') {
   const db = await getDb()
-  try {
-    return await db.collection(COLLECTIONS.incidents).aggregate([
+
+  function extractYear(s: string): number | null {
+    if (!s) return null
+    const m = s.match(/\b(1[89]\d{2}|20[012]\d)\b/)
+    return m ? parseInt(m[1]) : null
+  }
+
+  const byYear: Record<number, { count: number; cats: Set<string>; items: unknown[] }> = {}
+
+  if (source !== 'bapa_katha') {
+    const rows = await db.collection(COLLECTIONS.incidents).aggregate([
       { $match: { 'date.year': { $exists: true, $ne: null } } },
-      {
-        $group: {
-          _id: '$date.year',
-          count: { $sum: 1 },
-          categories: { $addToSet: '$category' },
-          incidents: {
-            $push: {
-              desc: '$description',
-              cat: '$category',
-              id: { $toString: '$_id' },
-            },
-          },
-        },
-      },
+      { $group: {
+        _id: '$date.year',
+        count: { $sum: 1 },
+        categories: { $addToSet: '$category' },
+        incidents: { $push: { desc: '$description', cat: '$category', id: { $toString: '$_id' } } },
+      }},
       { $sort: { _id: 1 } },
     ]).toArray()
-  } catch {
-    return []
+    for (const r of rows) {
+      byYear[r._id] = { count: r.count, cats: new Set(r.categories), items: r.incidents }
+    }
   }
+
+  if (source !== 'standard') {
+    const bkDocs = await db.collection(COLLECTIONS.bk_stories).find({}).toArray()
+    for (const doc of bkDocs) {
+      const year = extractYear((doc.time_life_stage as string) || '')
+      if (!year) continue
+      if (!byYear[year]) byYear[year] = { count: 0, cats: new Set(), items: [] }
+      byYear[year].count++
+      byYear[year].cats.add((doc.category as string) || 'bk_devotion')
+      byYear[year].items.push({
+        desc: (doc.summary as string) || (doc.story_title as string),
+        cat: doc.category,
+        id: doc._id.toString(),
+        source_type: 'bapa_katha',
+      })
+    }
+  }
+
+  return Object.entries(byYear)
+    .sort(([a], [b]) => Number(a) - Number(b))
+    .map(([year, d]) => ({
+      _id: Number(year),
+      count: d.count,
+      categories: [...d.cats],
+      incidents: d.items,
+    }))
 }
 
 export async function testConnection(uri: string) {

@@ -5,7 +5,7 @@ import { join } from 'path'
 import { existsSync } from 'fs'
 import os from 'os'
 
-const execAsync = promisify(exec)
+const PYTHON = process.platform === 'win32' ? 'python' : 'python3'
 const LOGIN_SCRIPT = join(process.cwd(), 'scripts', 'nlm_login_credentials.py')
 const LIST_SCRIPT  = join(process.cwd(), 'scripts', 'nlm_list.py')
 
