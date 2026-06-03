@@ -1,4 +1,4 @@
-import { MapPin, Clock } from 'lucide-react'
+import { MapPin, Clock, ExternalLink } from 'lucide-react'
 
 const BK_CATEGORY_META: Record<string, { color: string; bg: string; icon: string; label: string }> = {
   bk_line_that_changed_me:  { color: 'text-amber-800',   bg: 'bg-amber-50',   icon: '💬', label: 'The Line That Changed Me' },
@@ -32,6 +32,7 @@ interface BKStory {
   location?: string
   category?: string
   quote_clip_potential?: string
+  nlm_source_links?: { source_id: string; cited_text: string; nlm_url: string }[]
 }
 
 export default function BKStoryCard({ story }: { story: BKStory }) {
@@ -90,7 +91,7 @@ export default function BKStoryCard({ story }: { story: BKStory }) {
       )}
 
       {/* Meta row */}
-      <div className="flex flex-wrap gap-3 text-xs text-muted mt-2">
+      <div className="flex flex-wrap items-center gap-3 text-xs text-muted mt-2">
         {story.time_life_stage && story.time_life_stage !== 'not specified' && (
           <span className="flex items-center gap-1">
             <Clock className="w-3 h-3" />{story.time_life_stage}
@@ -100,6 +101,12 @@ export default function BKStoryCard({ story }: { story: BKStory }) {
           <span className="flex items-center gap-1">
             <MapPin className="w-3 h-3" />{story.location}
           </span>
+        )}
+        {story.nlm_source_links && story.nlm_source_links.length > 0 && (
+          <a href={story.nlm_source_links[0].nlm_url} target="_blank" rel="noopener noreferrer"
+            className="ml-auto flex items-center gap-1 text-blue-500 hover:text-blue-700 transition-colors">
+            <ExternalLink className="w-3 h-3" />View in source
+          </a>
         )}
       </div>
     </div>

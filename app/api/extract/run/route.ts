@@ -235,7 +235,12 @@ function parseBKResponse(text: string, category: string): ParsedBKStory[] {
 
 // ─── Shared helpers ──────────────────────────────────────────────────────────
 
-function askNotebook(notebookId: string, prompt: string): Promise<string> {
+interface AskResponse {
+  answer: string
+  references: { source_id: string; cited_text: string; citation_number: number | null }[]
+}
+
+function askNotebook(notebookId: string, prompt: string): Promise<AskResponse> {
   return new Promise((resolve, reject) => {
     const proc = spawn(PYTHON, [ASK_SCRIPT, notebookId, prompt], {
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -247,7 +252,7 @@ function askNotebook(notebookId: string, prompt: string): Promise<string> {
       try {
         const r = JSON.parse(stdout.trim())
         if (r.error) reject(new Error(r.error))
-        else resolve(r.answer || '')
+        else resolve({ answer: r.answer || '', references: r.references || [] })
       } catch {
         reject(new Error('Invalid response from nlm_ask.py'))
       }
@@ -290,8 +295,17 @@ export async function POST(req: NextRequest) {
                 prompt = (PROMPTS[cat] || `Extract all ${cat} incidents.`) + PROMPT_SUFFIX
               }
 
-              const answer = await askNotebook(nbId, prompt)
+              const { answer, references } = await askNotebook(nbId, prompt)
               const now = new Date()
+
+              // Build source links from references: { source_id → nlm_url }
+              const nlmSourceLinks = references
+                .filter(r => r.source_id)
+                .map(r => ({
+                  source_id: r.source_id,
+                  cited_text: r.cited_text,
+                  nlm_url: `https://notebooklm.google.com/notebook/${nbId}?source=${r.source_id}`,
+                }))
 
               if (isBK) {
                 const stories = parseBKResponse(answer, cat)
@@ -303,7 +317,7 @@ export async function POST(req: NextRequest) {
                     const hash = contentHash(nbId, cat, story.story_title + story.what_happened.slice(0, 80))
                     const result = await db.collection(COLLECTIONS.bk_stories).updateOne(
                       { contentHash: hash },
-                      { $setOnInsert: { ...story, contentHash: hash, extracted_at: now, source_notebook: nbId } },
+                      { $setOnInsert: { ...story, contentHash: hash, extracted_at: now, source_notebook: nbId, nlm_source_links: nlmSourceLinks } },
                       { upsert: true }
                     )
                     if (result.upsertedCount > 0) saved++
@@ -331,7 +345,7 @@ export async function POST(req: NextRequest) {
                     const hash = contentHash(nbId, cat, inc.description)
                     const result = await db.collection(COLLECTIONS.incidents).updateOne(
                       { contentHash: hash },
-                      { $setOnInsert: { ...inc, contentHash: hash, extracted_at: now, source_notebook: nbId, source_type: 'notebooklm' } },
+                      { $setOnInsert: { ...inc, contentHash: hash, extracted_at: now, source_notebook: nbId, source_type: 'notebooklm', nlm_source_links: nlmSourceLinks } },
                       { upsert: true }
                     )
                     if (result.upsertedCount > 0) saved++

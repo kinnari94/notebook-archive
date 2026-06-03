@@ -1,13 +1,23 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { Filter, ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import IncidentCard from '@/components/IncidentCard'
 import BKStoryCard from '@/components/BKStoryCard'
 
 const STANDARD_CATEGORIES = [
-  'daily_dateline', 'health_aahar_discipline', 'spiritual_exp', 'teachings_guidance',
-  'people_encounters', 'travels_journeys', 'institutional_timeline', 'seva_projects',
-  'awards_accreds', 'physical_spaces', 'social_contextual', 'life_formation', 'artifacts',
+  { key: 'daily_dateline',          label: 'Daily Dateline' },
+  { key: 'health_aahar_discipline', label: 'Health & Discipline' },
+  { key: 'spiritual_exp',           label: 'Spiritual Experiences' },
+  { key: 'teachings_guidance',      label: 'Teachings & Guidance' },
+  { key: 'people_encounters',       label: 'People & Encounters' },
+  { key: 'travels_journeys',        label: 'Travels & Journeys' },
+  { key: 'institutional_timeline',  label: 'Institutional' },
+  { key: 'seva_projects',           label: 'Seva Projects' },
+  { key: 'awards_accreds',          label: 'Awards & Recognition' },
+  { key: 'physical_spaces',         label: 'Physical Spaces' },
+  { key: 'social_contextual',       label: 'Social & Contextual' },
+  { key: 'life_formation',          label: 'Life Formation' },
+  { key: 'artifacts',               label: 'Artifacts' },
 ]
 
 const BK_CATEGORIES = [
@@ -30,11 +40,11 @@ const BK_CATEGORIES = [
   { key: 'bk_letters_mails',          label: 'Letters / Mails' },
 ]
 
-type Source = 'all' | 'standard' | 'bapa_katha'
+type Source = 'standard' | 'bapa_katha'
 const PAGE_SIZE = 20
 
 export default function Browse() {
-  const [source,   setSource]   = useState<Source>('all')
+  const [source,   setSource]   = useState<Source>('standard')
   const [category, setCategory] = useState('')
   const [person,   setPerson]   = useState('')
   const [location, setLocation] = useState('')
@@ -45,7 +55,8 @@ export default function Browse() {
   const [locations,setLocations]= useState<string[]>([])
   const [results,  setResults]  = useState<{ total: number; incidents: unknown[] }>({ total: 0, incidents: [] })
   const [loading,  setLoading]  = useState(false)
-  const [showFilters, setShowFilters] = useState(true)
+
+  const activeCategoryOptions = source === 'bapa_katha' ? BK_CATEGORIES : STANDARD_CATEGORIES
 
   useEffect(() => {
     fetch('/api/people').then(r => r.json()).then(d => setPeople(d.people || []))
@@ -70,82 +81,70 @@ export default function Browse() {
 
   useEffect(() => { fetchIncidents(0); setPage(0) }, [fetchIncidents])
 
-  // Reset category when source changes to avoid cross-mode category mismatch
   const handleSourceChange = (s: Source) => { setSource(s); setCategory('') }
 
   const totalPages = Math.ceil(results.total / PAGE_SIZE)
-  const activeCategoryOptions = source === 'bapa_katha' ? BK_CATEGORIES.map(c => ({ key: c.key, label: c.label }))
-    : source === 'standard' ? STANDARD_CATEGORIES.map(c => ({ key: c, label: c.replace(/_/g, ' ') }))
-    : [
-        ...STANDARD_CATEGORIES.map(c => ({ key: c, label: c.replace(/_/g, ' ') })),
-        ...BK_CATEGORIES.map(c => ({ key: c.key, label: `BK: ${c.label}` })),
-      ]
 
   return (
     <div className="p-8">
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="font-serif text-3xl font-bold text-ink">Browse Archive</h1>
-          <p className="text-muted text-sm mt-1">{results.total.toLocaleString()} incidents found</p>
-        </div>
-        <button onClick={() => setShowFilters(v => !v)}
-          className="flex items-center gap-2 px-4 py-2 bg-white border border-border rounded-xl text-sm font-medium hover:bg-cream transition-colors">
-          <Filter className="w-4 h-4" />Filters
-        </button>
+      <div className="mb-6">
+        <h1 className="font-serif text-3xl font-bold text-ink">Browse Archive</h1>
+        <p className="text-muted text-sm mt-1">{results.total.toLocaleString()} incidents found</p>
       </div>
 
       {/* Source toggle */}
       <div className="flex gap-2 mb-4">
-        {(['all', 'standard', 'bapa_katha'] as Source[]).map(s => (
-          <button key={s} onClick={() => handleSourceChange(s)}
-            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
-              source === s
-                ? s === 'bapa_katha' ? 'bg-amber-500 text-white' : 'bg-ink text-white'
-                : 'bg-white border border-border text-muted hover:bg-cream'
-            }`}>
-            {s === 'all' ? 'Both' : s === 'standard' ? 'Standard' : 'Bapa Katha'}
-          </button>
-        ))}
+        <button onClick={() => handleSourceChange('standard')}
+          className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
+            source === 'standard' ? 'bg-ink text-white' : 'bg-white border border-border text-muted hover:bg-cream'
+          }`}>
+          Standard
+        </button>
+        <button onClick={() => handleSourceChange('bapa_katha')}
+          className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
+            source === 'bapa_katha' ? 'bg-amber-500 text-white' : 'bg-white border border-border text-muted hover:bg-cream'
+          }`}>
+          Bapa Katha
+        </button>
       </div>
 
-      {showFilters && (
-        <div className="bg-white border border-border rounded-2xl p-5 mb-6 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-          <div>
-            <label className="block text-xs font-medium text-muted mb-1.5">Category</label>
-            <select value={category} onChange={e => setCategory(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl border border-border bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-ember/30">
-              <option value="">All categories</option>
-              {activeCategoryOptions.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-muted mb-1.5">Person</label>
-            <input list="people-list" value={person} onChange={e => setPerson(e.target.value)}
-              placeholder="Search people…"
-              className="w-full px-3 py-2 rounded-xl border border-border bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-ember/30" />
-            <datalist id="people-list">{people.map(p => <option key={p} value={p} />)}</datalist>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-muted mb-1.5">Location</label>
-            <input list="loc-list" value={location} onChange={e => setLocation(e.target.value)}
-              placeholder="Search locations…"
-              className="w-full px-3 py-2 rounded-xl border border-border bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-ember/30" />
-            <datalist id="loc-list">{locations.map(l => <option key={l} value={l} />)}</datalist>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-muted mb-1.5">Year From</label>
-            <input type="number" value={yearFrom} onChange={e => setYearFrom(e.target.value)}
-              placeholder="e.g. 1940"
-              className="w-full px-3 py-2 rounded-xl border border-border bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-ember/30" />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-muted mb-1.5">Year To</label>
-            <input type="number" value={yearTo} onChange={e => setYearTo(e.target.value)}
-              placeholder="e.g. 2024"
-              className="w-full px-3 py-2 rounded-xl border border-border bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-ember/30" />
-          </div>
+      {/* Filters */}
+      <div className="bg-white border border-border rounded-2xl p-5 mb-6 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+        <div>
+          <label className="block text-xs font-medium text-muted mb-1.5">Category</label>
+          <select value={category} onChange={e => setCategory(e.target.value)}
+            className="w-full px-3 py-2 rounded-xl border border-border bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-ember/30">
+            <option value="">All categories</option>
+            {activeCategoryOptions.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
+          </select>
         </div>
-      )}
+        <div>
+          <label className="block text-xs font-medium text-muted mb-1.5">Person</label>
+          <input list="people-list" value={person} onChange={e => setPerson(e.target.value)}
+            placeholder="Search people…"
+            className="w-full px-3 py-2 rounded-xl border border-border bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-ember/30" />
+          <datalist id="people-list">{people.map(p => <option key={p} value={p} />)}</datalist>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-muted mb-1.5">Location</label>
+          <input list="loc-list" value={location} onChange={e => setLocation(e.target.value)}
+            placeholder="Search locations…"
+            className="w-full px-3 py-2 rounded-xl border border-border bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-ember/30" />
+          <datalist id="loc-list">{locations.map(l => <option key={l} value={l} />)}</datalist>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-muted mb-1.5">Year From</label>
+          <input type="number" value={yearFrom} onChange={e => setYearFrom(e.target.value)}
+            placeholder="e.g. 1940"
+            className="w-full px-3 py-2 rounded-xl border border-border bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-ember/30" />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-muted mb-1.5">Year To</label>
+          <input type="number" value={yearTo} onChange={e => setYearTo(e.target.value)}
+            placeholder="e.g. 2024"
+            className="w-full px-3 py-2 rounded-xl border border-border bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-ember/30" />
+        </div>
+      </div>
 
       {loading ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

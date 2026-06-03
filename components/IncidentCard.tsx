@@ -1,4 +1,4 @@
-import { MapPin, Users, Calendar } from 'lucide-react'
+import { MapPin, Users, Calendar, ExternalLink } from 'lucide-react'
 
 const CATEGORY_META: Record<string, { color: string; bg: string; icon: string }> = {
   daily_dateline:       { color: 'text-blue-700',   bg: 'bg-blue-50',   icon: '📅' },
@@ -26,6 +26,7 @@ interface Incident {
   source_chunk?: string
   verified?: boolean
   extracted_at?: string
+  nlm_source_links?: { source_id: string; cited_text: string; nlm_url: string }[]
 }
 
 export default function IncidentCard({ incident }: { incident: Incident }) {
@@ -56,7 +57,7 @@ export default function IncidentCard({ incident }: { incident: Incident }) {
         </blockquote>
       )}
 
-      <div className="flex flex-wrap gap-3 text-xs text-muted">
+      <div className="flex flex-wrap items-center gap-3 text-xs text-muted">
         {incident.people && incident.people.length > 0 && (
           <span className="flex items-center gap-1">
             <Users className="w-3 h-3" />
@@ -69,6 +70,12 @@ export default function IncidentCard({ incident }: { incident: Incident }) {
             <MapPin className="w-3 h-3" />
             {incident.locations.slice(0, 2).join(', ')}
           </span>
+        )}
+        {incident.nlm_source_links && incident.nlm_source_links.length > 0 && (
+          <a href={incident.nlm_source_links[0].nlm_url} target="_blank" rel="noopener noreferrer"
+            className="ml-auto flex items-center gap-1 text-blue-500 hover:text-blue-700 transition-colors">
+            <ExternalLink className="w-3 h-3" />View in source
+          </a>
         )}
       </div>
     </div>
