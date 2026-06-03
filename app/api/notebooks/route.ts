@@ -1,16 +1,15 @@
 import { NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
 import { spawn } from 'child_process'
 import { join } from 'path'
 
 const PYTHON = process.platform === 'win32' ? 'python' : 'python3'
 const LIST_SCRIPT = join(process.cwd(), 'scripts', 'nlm_list.py')
 
-function runList(env?: Record<string, string>): Promise<string> {
+function runList(): Promise<string> {
   return new Promise((resolve, reject) => {
     const proc = spawn(PYTHON, [LIST_SCRIPT], {
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env, ...env },
+      env: process.env,
     })
     let stdout = ''
     let stderr = ''
@@ -27,11 +26,8 @@ function runList(env?: Record<string, string>): Promise<string> {
 }
 
 export async function GET() {
-  const session = await getServerSession()
-  const accessToken = (session as any)?.access_token as string | undefined
-
   try {
-    const stdout = await runList(accessToken ? { GOOGLE_ACCESS_TOKEN: accessToken } : undefined)
+    const stdout = await runList()
     const result = JSON.parse(stdout)
     if (result.error) return NextResponse.json({ error: result.error, notebooks: [] })
     return NextResponse.json({ notebooks: result })

@@ -11,17 +11,23 @@ const STANDARD_CATEGORIES = [
 ]
 
 const BK_CATEGORIES = [
-  { key: 'bk_devotion',          label: 'Devotion to PKD' },
-  { key: 'bk_bhakti',            label: 'Bhakti' },
-  { key: 'bk_satsang',           label: 'Satsang' },
-  { key: 'bk_personal_guidance', label: 'Personal Guidance' },
-  { key: 'bk_visionary',         label: 'Visionary' },
-  { key: 'bk_guiding_youth',     label: 'Guiding Youth' },
-  { key: 'bk_dasha',             label: 'Dasha / Inner State' },
-  { key: 'bk_seva',              label: 'Seva' },
-  { key: 'bk_children_legacy',   label: 'Children & Legacy' },
-  { key: 'bk_tributes',          label: 'Tributes' },
-  { key: 'bk_satsang_deep',      label: 'Deep Satsang' },
+  { key: 'bk_line_that_changed_me',   label: 'The Line That Changed Me' },
+  { key: 'bk_shared_events',          label: 'Shared Events' },
+  { key: 'bk_first_meeting',          label: 'First Meeting' },
+  { key: 'bk_humour',                 label: 'Humorous Prasangs' },
+  { key: 'bk_one_ajna',               label: 'One Ajna / Guidance' },
+  { key: 'bk_the_object',             label: 'The Object' },
+  { key: 'bk_discipline_training',    label: 'Discipline / Training' },
+  { key: 'bk_dasha_family',           label: 'Dasha / Family Observations' },
+  { key: 'bk_non_jain',               label: "Non-Jain in Bapa's Circle" },
+  { key: 'bk_he_found_me_first',      label: 'He Found Me First' },
+  { key: 'bk_he_doesnt_see_time',     label: "He Doesn't See Time" },
+  { key: 'bk_vision_behind_projects', label: 'Vision Behind Projects' },
+  { key: 'bk_compassion_seva',        label: 'Compassion / Seva' },
+  { key: 'bk_children_teaching',      label: 'Children / Teaching Through Play' },
+  { key: 'bk_satsang_transformation', label: 'Satsang / Transformation' },
+  { key: 'bk_love_for_pkd',           label: 'Love for PKD / Bhakti' },
+  { key: 'bk_letters_mails',          label: 'Letters / Mails' },
 ]
 
 type Source = 'all' | 'standard' | 'bapa_katha'

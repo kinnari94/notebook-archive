@@ -1,7 +1,6 @@
 'use client'
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { useSession } from 'next-auth/react'
-import { RefreshCw, Play, CheckCircle, AlertCircle, BookOpen, Loader2, LogOut } from 'lucide-react'
+import { RefreshCw, Play, CheckCircle, AlertCircle, BookOpen, Loader2 } from 'lucide-react'
 
 const CATEGORIES = [
   { key: 'daily_dateline',          label: 'Daily Dateline',        icon: '📅' },
@@ -20,17 +19,23 @@ const CATEGORIES = [
 ]
 
 const BK_CATEGORIES = [
-  { key: 'bk_devotion',          label: 'Devotion to PKD',           icon: '🙏' },
-  { key: 'bk_bhakti',            label: 'Bhakti',                    icon: '❤️' },
-  { key: 'bk_satsang',           label: 'Satsang',                   icon: '📿' },
-  { key: 'bk_personal_guidance', label: 'Personal Guidance / Agna',  icon: '🧭' },
-  { key: 'bk_visionary',         label: 'Visionary / Infrastructure', icon: '🏛️' },
-  { key: 'bk_guiding_youth',     label: 'Guiding Youth',             icon: '🌟' },
-  { key: 'bk_dasha',             label: 'Dasha / Inner State',       icon: '✨' },
-  { key: 'bk_seva',              label: 'Seva',                      icon: '🌱' },
-  { key: 'bk_children_legacy',   label: 'Children & Legacy',         icon: '👶' },
-  { key: 'bk_tributes',          label: 'Tributes / External',       icon: '🏆' },
-  { key: 'bk_satsang_deep',      label: 'Deep Satsang Analysis',     icon: '🔍' },
+  { key: 'bk_line_that_changed_me',   label: 'The Line That Changed Me',         icon: '💬' },
+  { key: 'bk_shared_events',          label: 'Shared Events',                    icon: '🤝' },
+  { key: 'bk_first_meeting',          label: 'First Meeting',                    icon: '🌅' },
+  { key: 'bk_humour',                 label: 'Humorous Prasangs',                icon: '😄' },
+  { key: 'bk_one_ajna',               label: 'One Ajna / Guidance',              icon: '🧭' },
+  { key: 'bk_the_object',             label: 'The Object',                       icon: '📿' },
+  { key: 'bk_discipline_training',    label: 'Discipline / Training',            icon: '⚖️' },
+  { key: 'bk_dasha_family',           label: 'Dasha / Family Observations',      icon: '✨' },
+  { key: 'bk_non_jain',               label: "Non-Jain in Bapa's Circle",        icon: '🌍' },
+  { key: 'bk_he_found_me_first',      label: 'He Found Me First',                icon: '🔍' },
+  { key: 'bk_he_doesnt_see_time',     label: "He Doesn't See Time",              icon: '🌙' },
+  { key: 'bk_vision_behind_projects', label: 'Vision Behind Projects',           icon: '🏛️' },
+  { key: 'bk_compassion_seva',        label: 'Compassion / Seva',                icon: '🌱' },
+  { key: 'bk_children_teaching',      label: 'Children / Teaching Through Play', icon: '👶' },
+  { key: 'bk_satsang_transformation', label: 'Satsang / Transformation',         icon: '📖' },
+  { key: 'bk_love_for_pkd',           label: 'Love for PKD / Bhakti',            icon: '🙏' },
+  { key: 'bk_letters_mails',          label: 'Letters / Mails',                  icon: '✉️' },
 ]
 
 function isBKNotebook(title: string): boolean {
@@ -41,34 +46,24 @@ interface Notebook { id: string; title: string; source_count: number }
 interface LogLine  { msg: string; level: string; ts: string }
 
 export default function Extract() {
-  const { data: session } = useSession()
-  const isGoogleSession = !!(session as any)?.access_token
+  const [nlmConnected, setNlmConnected] = useState(false)
+  const [nlmChecking, setNlmChecking]   = useState(true)
 
-  // NotebookLM connection state
-  const [nlmConnected, setNlmConnected]   = useState(false)
-  const [nlmChecking, setNlmChecking]     = useState(true)
-  const [nlmEmail, setNlmEmail]           = useState('')
-  const [nlmPassword, setNlmPassword]     = useState('')
-  const [nlmLogging, setNlmLogging]       = useState(false)
-  const [nlmError, setNlmError]           = useState<string | null>(null)
-
-  // Notebooks / extraction state
-  const [notebooks, setNotebooks]         = useState<Notebook[]>([])
-  const [nbLoading, setNbLoading]         = useState(false)
-  const [nbError, setNbError]             = useState<string | null>(null)
-  const [selectedNbs, setSelectedNbs]     = useState<string[]>([])
-  const [selectedCats, setSelectedCats]   = useState<string[]>([])
-  const [running, setRunning]             = useState(false)
-  const [logs, setLogs]                   = useState<LogLine[]>([])
-  const [progress, setProgress]           = useState<{ done: number; total: number } | null>(null)
+  const [notebooks, setNotebooks]     = useState<Notebook[]>([])
+  const [nbLoading, setNbLoading]     = useState(false)
+  const [nbError, setNbError]         = useState<string | null>(null)
+  const [selectedNbs, setSelectedNbs] = useState<string[]>([])
+  const [selectedCats, setSelectedCats] = useState<string[]>([])
+  const [running, setRunning]         = useState(false)
+  const [logs, setLogs]               = useState<LogLine[]>([])
+  const [progress, setProgress]       = useState<{ done: number; total: number } | null>(null)
   const logsRef = useRef<HTMLDivElement>(null)
 
-  // Derived: which selected notebooks are Bapa Katha
   const bkIds = selectedNbs.filter(id => {
     const nb = notebooks.find(n => n.id === id)
     return nb ? isBKNotebook(nb.title) : false
   })
-  const hasBK      = bkIds.length > 0
+  const hasBK       = bkIds.length > 0
   const hasStandard = selectedNbs.length > bkIds.length
   const activeCats  = hasBK ? BK_CATEGORIES : CATEGORIES
 
@@ -76,21 +71,12 @@ export default function Extract() {
     logsRef.current?.scrollTo({ top: logsRef.current.scrollHeight, behavior: 'smooth' })
   }, [logs])
 
-  // Auto-connect when Google session is available
   useEffect(() => {
     fetch('/api/nlm-connect').then(r => r.json()).then(d => {
       setNlmChecking(false)
       if (d.connected) { setNlmConnected(true); loadNotebooks() }
     })
   }, [])
-
-  // Also auto-connect once Google session resolves (if not yet connected)
-  useEffect(() => {
-    if (isGoogleSession && !nlmConnected && !nlmChecking) {
-      setNlmConnected(true)
-      loadNotebooks()
-    }
-  }, [isGoogleSession, nlmConnected, nlmChecking])
 
   const loadNotebooks = useCallback(async () => {
     setNbLoading(true); setNbError(null)
@@ -104,23 +90,6 @@ export default function Extract() {
       setNbLoading(false)
     }
   }, [])
-
-  async function connectNotebookLM(e: React.FormEvent) {
-    e.preventDefault()
-    setNlmLogging(true); setNlmError(null)
-    try {
-      const r = await fetch('/api/nlm-connect', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: nlmEmail, password: nlmPassword }),
-      })
-      const d = await r.json()
-      if (d.ok) { setNlmConnected(true); setNlmPassword(''); loadNotebooks() }
-      else setNlmError(d.error || 'Login failed')
-    } finally {
-      setNlmLogging(false)
-    }
-  }
 
   async function runExtraction() {
     if (!selectedNbs.length || !selectedCats.length) return
@@ -159,7 +128,7 @@ export default function Extract() {
 
   const toggleNb  = (id: string) => {
     setSelectedNbs(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id])
-    setSelectedCats([]) // reset categories when notebook selection changes
+    setSelectedCats([])
   }
   const toggleCat = (k: string) => setSelectedCats(p => p.includes(k) ? p.filter(x => x !== k) : [...p, k])
 
@@ -174,50 +143,33 @@ export default function Extract() {
         <p className="text-muted text-sm mt-1">Pull incidents from NotebookLM into the archive</p>
       </div>
 
-      {/* NotebookLM login form — hidden when user is signed in via Google */}
-      {!nlmChecking && !nlmConnected && !isGoogleSession && (
-        <div className="bg-white border border-border rounded-2xl p-8 mb-8 max-w-md">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
-              <BookOpen className="w-5 h-5 text-blue-600" />
-            </div>
-            <div>
-              <h2 className="font-semibold text-ink">Connect NotebookLM</h2>
-              <p className="text-xs text-muted">Sign in with your Google account</p>
-            </div>
-          </div>
-
-          <form onSubmit={connectNotebookLM} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1.5">Email</label>
-              <input type="email" value={nlmEmail} onChange={e => setNlmEmail(e.target.value)}
-                required autoFocus placeholder="you@gmail.com"
-                className="w-full px-4 py-2.5 rounded-xl border border-border bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1.5">Password</label>
-              <input type="password" value={nlmPassword} onChange={e => setNlmPassword(e.target.value)}
-                required placeholder="••••••••"
-                className="w-full px-4 py-2.5 rounded-xl border border-border bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
-            </div>
-            {nlmError && (
-              <div className="flex items-start gap-2 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">
-                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />{nlmError}
-              </div>
-            )}
-            <button type="submit" disabled={nlmLogging}
-              className="w-full flex items-center justify-center gap-2 py-2.5 bg-blue-600 text-white rounded-xl font-semibold text-sm hover:bg-blue-700 disabled:opacity-50 transition-colors">
-              {nlmLogging ? <Loader2 className="w-4 h-4 animate-spin" /> : <BookOpen className="w-4 h-4" />}
-              {nlmLogging ? 'Signing in…' : 'Sign in to NotebookLM'}
-            </button>
-          </form>
-          {nlmLogging && <p className="text-xs text-muted mt-3 text-center">Authenticating — this may take up to 30 seconds…</p>}
-        </div>
-      )}
-
       {nlmChecking && (
         <div className="flex items-center gap-3 text-muted text-sm mb-8">
           <Loader2 className="w-4 h-4 animate-spin" />Checking NotebookLM connection…
+        </div>
+      )}
+
+      {!nlmChecking && !nlmConnected && (
+        <div className="bg-white border border-amber-200 rounded-2xl p-8 mb-8 max-w-lg">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center">
+              <BookOpen className="w-5 h-5 text-amber-600" />
+            </div>
+            <div>
+              <h2 className="font-semibold text-ink">NotebookLM not connected</h2>
+              <p className="text-xs text-muted">Run the login command in your terminal</p>
+            </div>
+          </div>
+          <div className="bg-gray-900 rounded-xl px-4 py-3 font-mono text-sm text-green-400 mb-4">
+            notebooklm login
+          </div>
+          <p className="text-xs text-muted">
+            This opens a browser window to sign in with your Google account. Once done, come back and refresh this page.
+          </p>
+          <button onClick={() => { setNlmChecking(true); fetch('/api/nlm-connect').then(r => r.json()).then(d => { setNlmChecking(false); if (d.connected) { setNlmConnected(true); loadNotebooks() } }) }}
+            className="mt-4 flex items-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-xl text-sm font-medium hover:bg-amber-600 transition-colors">
+            <RefreshCw className="w-4 h-4" />Check again
+          </button>
         </div>
       )}
 
@@ -226,20 +178,12 @@ export default function Extract() {
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2">
               <CheckCircle className="w-4 h-4 text-emerald-600" />
-              <span className="text-sm text-emerald-700 font-medium">
-                {isGoogleSession ? `Connected as ${session?.user?.email}` : 'NotebookLM connected'}
-              </span>
+              <span className="text-sm text-emerald-700 font-medium">NotebookLM connected</span>
             </div>
-            <div className="flex items-center gap-2">
-              <button onClick={loadNotebooks} disabled={nbLoading}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-muted hover:text-ink border border-border rounded-lg bg-white hover:bg-cream transition-colors">
-                <RefreshCw className={`w-3.5 h-3.5 ${nbLoading ? 'animate-spin' : ''}`} />Refresh
-              </button>
-              <button onClick={() => setNlmConnected(false)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-muted hover:text-ink border border-border rounded-lg bg-white hover:bg-cream transition-colors">
-                <LogOut className="w-3.5 h-3.5" />Disconnect
-              </button>
-            </div>
+            <button onClick={loadNotebooks} disabled={nbLoading}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-muted hover:text-ink border border-border rounded-lg bg-white hover:bg-cream transition-colors">
+              <RefreshCw className={`w-3.5 h-3.5 ${nbLoading ? 'animate-spin' : ''}`} />Refresh
+            </button>
           </div>
 
           {nbError && (

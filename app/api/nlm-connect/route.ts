@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
 import { spawn } from 'child_process'
 import { join } from 'path'
 import { existsSync } from 'fs'
@@ -14,11 +13,11 @@ const STORAGE_PATHS = [
   join(os.homedir(), '.notebooklm', 'storage_state.json'),
 ]
 
-function runScript(args: string[], timeoutMs: number, env?: Record<string, string>): Promise<string> {
+function runScript(args: string[], timeoutMs: number): Promise<string> {
   return new Promise((resolve, reject) => {
     const proc = spawn(PYTHON, args, {
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env, ...env },
+      env: process.env,
     })
     let stdout = ''
     let stderr = ''
@@ -34,22 +33,8 @@ function runScript(args: string[], timeoutMs: number, env?: Record<string, strin
   })
 }
 
-// GET — check current NotebookLM auth status
-// If the user has a Google session, try their access token first
+// GET — check if notebooklm login storage exists and is valid
 export async function GET() {
-  const session = await getServerSession()
-  const accessToken = (session as any)?.access_token as string | undefined
-
-  if (accessToken) {
-    try {
-      const stdout = await runScript([LIST_SCRIPT], 20000, { GOOGLE_ACCESS_TOKEN: accessToken })
-      const result = JSON.parse(stdout)
-      if (Array.isArray(result)) return NextResponse.json({ connected: true })
-    } catch {
-      // fall through to cookie-based check
-    }
-  }
-
   const hasFile = STORAGE_PATHS.some(p => existsSync(p))
   if (!hasFile && !process.env.NOTEBOOKLM_AUTH_JSON) {
     return NextResponse.json({ connected: false })

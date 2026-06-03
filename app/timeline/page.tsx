@@ -18,10 +18,13 @@ const CATEGORY_COLORS: Record<string, string> = {
   seva_projects: '#10B981', awards_accreds: '#EAB308', physical_spaces: '#F97316',
   health_aahar_discipline: '#EC4899', social_contextual: '#6B7280',
   life_formation: '#F43F5E', artifacts: '#78716C',
-  bk_devotion: '#D97706', bk_bhakti: '#BE185D', bk_satsang: '#7C3AED',
-  bk_personal_guidance: '#1D4ED8', bk_visionary: '#4338CA', bk_guiding_youth: '#15803D',
-  bk_dasha: '#6D28D9', bk_seva: '#065F46', bk_children_legacy: '#BE185D',
-  bk_tributes: '#B45309', bk_satsang_deep: '#0E7490',
+  bk_line_that_changed_me: '#D97706', bk_shared_events: '#1D4ED8', bk_first_meeting: '#BE185D',
+  bk_humour: '#EAB308', bk_one_ajna: '#4338CA', bk_the_object: '#78716C',
+  bk_discipline_training: '#DC2626', bk_dasha_family: '#6D28D9', bk_non_jain: '#0F766E',
+  bk_he_found_me_first: '#065F46', bk_he_doesnt_see_time: '#0E7490',
+  bk_vision_behind_projects: '#7C3AED', bk_compassion_seva: '#15803D',
+  bk_children_teaching: '#BE185D', bk_satsang_transformation: '#A21CAF',
+  bk_love_for_pkd: '#C2410C', bk_letters_mails: '#0369A1',
 }
 
 export default function Timeline() {

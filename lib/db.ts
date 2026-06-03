@@ -265,7 +265,7 @@ export async function getTimelineData(source: 'standard' | 'bapa_katha' | 'all' 
       if (!year) continue
       if (!byYear[year]) byYear[year] = { count: 0, cats: new Set(), items: [] }
       byYear[year].count++
-      byYear[year].cats.add((doc.category as string) || 'bk_devotion')
+      byYear[year].cats.add((doc.category as string) || 'bk_line_that_changed_me')
       byYear[year].items.push({
         desc: (doc.summary as string) || (doc.story_title as string),
         cat: doc.category,

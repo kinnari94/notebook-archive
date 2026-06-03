@@ -1,9 +1,9 @@
 import NextAuth from 'next-auth'
 import GoogleProvider from 'next-auth/providers/google'
 import type { JWT } from 'next-auth/jwt'
-import type { Session } from 'next-auth'
+import type { Session, NextAuthOptions } from 'next-auth'
 
-const handler = NextAuth({
+export const authOptions: NextAuthOptions = {
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
@@ -25,6 +25,8 @@ const handler = NextAuth({
       return session
     },
   },
-})
+}
+
+const handler = NextAuth(authOptions)
 
 export { handler as GET, handler as POST }

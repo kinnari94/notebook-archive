@@ -1,5 +1,4 @@
 import { NextRequest } from 'next/server'
-import { getServerSession } from 'next-auth'
 import { spawn } from 'child_process'
 import { join } from 'path'
 import { createHash } from 'crypto'
@@ -17,19 +16,19 @@ const PYTHON = process.platform === 'win32' ? 'python' : 'python3'
 // ─── Standard extraction ────────────────────────────────────────────────────
 
 const PROMPTS: Record<string, string> = {
-  daily_dateline:           'Extract all chronological dateline events — meetings, ceremonies, inaugurations, daily routines.',
-  health_aahar_discipline:  'Extract all mentions of physical health, dietary practices, fasting, sleep patterns, physical discipline.',
-  spiritual_exp:            'Extract mystical experiences, samadhi states, meditation milestones, divine visions, spiritual breakthroughs.',
-  teachings_guidance:       'Extract satsangs, pravachans, philosophical discourses, spiritual instructions given to disciples.',
-  people_encounters:        'Extract first meetings, dikshas, notable interactions with disciples, visitors, and public figures.',
-  travels_journeys:         'Extract all travel — pilgrimages, yatras, national and international visits, journeys.',
-  institutional_timeline:   'Extract founding dates, organizational milestones, governance events, institutional changes.',
-  seva_projects:            'Extract community service, education, healthcare, disaster relief, and social welfare initiatives.',
-  awards_accreds:           'Extract awards, honours, government recognition, honorary degrees, and public acknowledgements.',
-  physical_spaces:          'Extract ashram construction, land acquisition, temple inaugurations, and infrastructure milestones.',
-  social_contextual:        'Extract responses to national events, social issues, COVID-era activities, and historical context.',
-  life_formation:           'Extract birth, childhood, family background, early education, and formative life events.',
-  artifacts:                'Extract personal objects, manuscripts, gifts, sacred items, and notable photographs mentioned.',
+  daily_dateline:           'Extract all chronological dateline events — meetings, ceremonies, inaugurations, daily routines — of Gurudev / Pujya Gurudevshri only. Do not include events of disciples, visitors, or other individuals.',
+  health_aahar_discipline:  'Extract all mentions of Gurudev\'s / Pujya Gurudevshri\'s physical health, dietary practices, fasting, sleep patterns, and physical discipline. Do not include health mentions of others.',
+  spiritual_exp:            'Extract Gurudev\'s / Pujya Gurudevshri\'s mystical experiences, samadhi states, meditation milestones, divine visions, and spiritual breakthroughs. Do not include experiences attributed to disciples or devotees.',
+  teachings_guidance:       'Extract satsangs, pravachans, philosophical discourses, and spiritual instructions given by Gurudev / Pujya Gurudevshri to disciples. Do not include teachings by others.',
+  people_encounters:        'Extract first meetings, dikshas, and notable interactions where Gurudev / Pujya Gurudevshri is the central figure — with disciples, visitors, and public figures.',
+  travels_journeys:         'Extract all travel — pilgrimages, yatras, national and international visits, journeys — undertaken by Gurudev / Pujya Gurudevshri. Do not include travel of others unless Gurudev was present.',
+  institutional_timeline:   'Extract founding dates, organizational milestones, governance events, and institutional changes led or initiated by Gurudev / Pujya Gurudevshri or the Mission under his direction.',
+  seva_projects:            'Extract community service, education, healthcare, disaster relief, and social welfare initiatives undertaken by Gurudev / Pujya Gurudevshri or the Mission under his leadership.',
+  awards_accreds:           'Extract awards, honours, government recognition, honorary degrees, and public acknowledgements received by Gurudev / Pujya Gurudevshri. Do not include awards given to others.',
+  physical_spaces:          'Extract ashram construction, land acquisition, temple inaugurations, and infrastructure milestones directed or inaugurated by Gurudev / Pujya Gurudevshri.',
+  social_contextual:        'Extract references to the prevailing social, political, or world conditions during a given time period — such as wars, pandemics (e.g. COVID 2019–2021), famines, political events, or major national/global circumstances — as context for the period in which Gurudev / Pujya Gurudevshri was active. Do not extract Gurudev\'s responses or actions — only the background conditions of the era.',
+  life_formation:           'Extract Gurudev\'s / Pujya Gurudevshri\'s birth, childhood, family background, early education, and formative life events. Do not include biographical details of others.',
+  artifacts:                'Extract personal objects, manuscripts, gifts, sacred items, and notable photographs belonging to or associated with Gurudev / Pujya Gurudevshri.',
 }
 
 const PROMPT_SUFFIX = `
@@ -100,121 +99,77 @@ function parseResponse(text: string, category: string): ParsedIncident[] {
 
 // ─── Bapa Katha extraction ───────────────────────────────────────────────────
 
-const BK_BASE = `This is a Bapa Katha transcript — devotee interviews sharing personal experiences with Bapaji / Gurudev.
+const BK_BASE = `This is a Bapa Katha transcript — devotee interviews sharing personal experiences with Gurudevshri / Bapaji.
 Be exhaustive. Extract every relevant moment. This transcript should not need to be re-run.`
 
 const BK_PROMPTS: Record<string, string> = {
-  bk_devotion: `${BK_BASE}
+  bk_line_that_changed_me: `${BK_BASE}
 
-Extract ALL stories showing devotion to Param Krupalu Dev (Bapaji). Include:
-- Deep love, reverence, or surrender toward Gurudev
-- Moments where Gurudev's grace or presence was strongly felt
-- Stories showing complete trust, faith, or inner connection
-- How devotion to Gurudev transformed the devotee's life`,
+Find every instance where a devotee recalls a single sentence or phrase spoken by Gurudevshri that caused an immediate or lasting shift in their thinking, behavior, or life direction. For each instance, note: the exact words spoken, the situation in which it was said, the devotee's state before hearing it, and what changed after. Also find moments where a devotee brought a specific personal question to Gurudevshri and received an answer that redirected their inner life.`,
 
-  bk_bhakti: `${BK_BASE}
+  bk_shared_events: `${BK_BASE}
 
-Extract ALL bhakti stories. Include:
-- Devotional practices: bhajans, kirtan, puja, meditation
-- Emotional or spiritual experiences of inner connection
-- How bhakti developed or deepened through Gurudev's influence
-- Love for God that Gurudev ignited or strengthened`,
+Find all instances where multiple devotees describe being present at the same specific event — a yatra, a satsang, a pratishtha, a paryushan, a shibir. For each shared event, note: the location and approximate year, what each person remembers seeing or hearing, any differences in what each person noticed, and what made that specific gathering memorable or transformative.`,
 
-  bk_satsang: `${BK_BASE}
+  bk_first_meeting: `${BK_BASE}
 
-Extract ALL general satsang stories. Include:
-- Attending satsangs, pravachans, or discourses
-- Key spiritual teachings received through satsang
-- How satsang became a turning point in the devotee's life
-- Changes in values, understanding, or behaviour after satsang`,
+Find every account of a devotee's very first encounter with Gurudevshri. For each first meeting, note: how the meeting happened (was it planned or accidental), what the devotee's attitude or state was before meeting Him, the first thing they noticed or felt, any words spoken, and how their life shifted from that moment onward.`,
 
-  bk_personal_guidance: `${BK_BASE}
+  bk_humour: `${BK_BASE}
 
-Extract ALL stories of personal guidance or agna from Gurudev. Include:
-- Direct instructions or advice given to the devotee
-- Situations where Gurudev intervened or redirected someone's life
-- Decisions made based on Gurudev's guidance
-- Times when Gurudev addressed a specific personal situation`,
+Find every instance of Gurudevshri being playful, witty, teasing, or using humor — with children, with devotees, in informal settings, in response to devotees' mistakes, or during games and outings. For each instance, note: the exact playful action or words, who was present, the devotee's reaction, and whether the humor carried a hidden teaching.`,
 
-  bk_visionary: `${BK_BASE}
+  bk_one_ajna: `${BK_BASE}
 
-Extract ALL stories showing Gurudev's vision and spiritual infrastructure work. Include:
-- Gurudev's long-term plans or foresight for the Mission
-- Building of institutions, centres, or spiritual infrastructure
-- Stories showing organisational leadership or broader vision
-- Moments revealing how Gurudev shaped the direction of spiritual work`,
+Find every instance where Gurudevshri gave a specific personal instruction — about career, marriage, diet, business, daily practice, relationships, or life decisions — to an individual devotee. For each instance, note: what the devotee's situation or dilemma was, the exact guidance given, how the guidance was delivered (direct, through a question, through a story), whether the devotee followed it, and what the outcome was.`,
 
-  bk_guiding_youth: `${BK_BASE}
+  bk_the_object: `${BK_BASE}
 
-Extract ALL stories of Gurudev guiding youth. Include:
-- Direct interactions between Gurudev and young devotees
-- How Gurudev connected with, inspired, or mentored youth
-- Youth-specific teachings, examples, or guidance
-- How young devotees' lives changed through Gurudev's influence
-- Group meetings, camps, or youth satsangs`,
+Find every instance where a physical object plays a central role in an interaction with Gurudevshri — something He gave, received, refused, used, threw, or pointed to. For each instance, note: what the object was, the exact moment involving it, what He said or did with it, who received or witnessed it, and whether the object still exists with that person today.`,
 
-  bk_dasha: `${BK_BASE}
+  bk_discipline_training: `${BK_BASE}
 
-Extract ALL stories revealing Gurudev's inner state (dasha). Include:
-- Moments showing Gurudev's equanimity, compassion, or inner peace
-- Times when devotees glimpsed Gurudev's spiritual depth or awareness
-- Stories showing Gurudev's patience, love, humility, or qualities beyond the ordinary
-- Incidents revealing Gurudev's inner life`,
+Find every instance where Gurudevshri was visibly stern, corrective, or gave a difficult instruction — removing someone from a role, asking someone to leave, assigning a penance, refusing a request, or delivering a sharp rebuke. For each instance, note: what triggered the correction, the exact words or action used, the devotee's immediate reaction, and how the devotee understood or reframed that strictness in hindsight.`,
 
-  bk_seva: `${BK_BASE}
+  bk_dasha_family: `${BK_BASE}
 
-Extract ALL seva stories. Include:
-- Service done for Gurudev, the Mission, or the community
-- How Gurudev inspired, assigned, or recognised seva
-- Personal transformations through seva
-- The meaning or value of seva as taught by Gurudev`,
+Find every instance where a blood relative, childhood neighbor, or person who knew Gurudevshri before He was publicly known describes an observation of His inner state or unusual behavior — in childhood, teenage years, or early youth. For each instance, note: the approximate age of Gurudevshri at the time, what was observed (stillness, unusual knowledge, detachment, spontaneous teaching), the setting, and the narrator's own understanding of what they were witnessing.`,
 
-  bk_children_legacy: `${BK_BASE}
+  bk_non_jain: `${BK_BASE}
 
-Extract ALL stories about children and legacy. Include:
-- Gurudev's interactions with children or young devotees
-- How Gurudev shaped the next generation
-- Legacy left in families, institutions, or communities
-- Long-term impact across generations`,
+Find every instance involving a devotee who came from outside the Jain tradition — a different religion, a different cultural background, a different country or language — and how Gurudevshri connected with or guided them. For each instance, note: who the person was and what their background was, how the connection was established, any specific words or actions by Gurudevshri toward them, and what drew or kept that person in His circle.`,
 
-  bk_tributes: `${BK_BASE}
+  bk_he_found_me_first: `${BK_BASE}
 
-Extract ALL tribute stories and external perspectives. Include:
-- Recognition or praise of Gurudev from outsiders or public figures
-- How Gurudev was perceived by non-devotees or institutions
-- External recognition, awards, or respect received
-- Any perspective from outside the immediate devotee community`,
+Find every instance where Gurudevshri initiated contact, waited for, traveled toward, or specifically reached out to a devotee who was not actively seeking — or a moment where He demonstrated He had been watching, waiting, or working for a soul before that soul was aware of Him. For each instance, note: what Gurudevshri did or said that was unexpected, the devotee's state or distance from spiritual seeking at that time, and the devotee's response on realizing they had been found first.`,
 
-  bk_satsang_deep: `${BK_BASE}
+  bk_he_doesnt_see_time: `${BK_BASE}
 
-Extract ALL satsang-related moments from this transcript. A moment qualifies if it includes:
-- A satsang, pravachan, shibir, swadhyay, class, discourse, or spiritual explanation
-- A teaching, example, analogy, joke, metaphor, or practical explanation given by Gurudev
-- A person's shift from worldly interest toward love for satsang
-- A moment where someone felt "Gurudev was speaking directly to me"
-- A spiritual doubt resolved through satsang
-- A scriptural concept made simple through Gurudev's explanation
-- A transformation in lifestyle, habits, understanding, values, or faith after listening to satsang
-- A quote from Gurudev's satsang that can become a strong documentary moment
-- Gurudev's command over shastras, language, examples, or audience connection
+Find every instance that reveals Gurudevshri's relationship with time — staying awake through the night, replying to letters or emails before sleeping, attending to individuals at unusual hours, being present at dawn for sadhana, continuing without rest across days of yatra or shibir. For each instance, note: the time of day or night, what He was doing, who witnessed it, and what it revealed about His inner state or commitment.`,
 
-Known story leads to watch for: "From movies to love for satsang" (Vijay Uncle); Star Wars / dead body story (Vijay Uncle); Dead body story (Rekha Maa); Pista / pani puri playful bodh (Bharatbhai Jogani); Karma / washing plate (Vijay Uncle / Bipin Uncle); Figures of speech (Dakshaben); Paramshrutpanu; "Had not read granths yet speaking of shastras"; "Did not know Gujarati yet spoke fluently"; "Everyone feels He was talking to me"; Group meetings with youth; Spirituality while playing games (Jyoti Doshi).
+  bk_vision_behind_projects: `${BK_BASE}
 
-Satsang Sub-Themes (tag each story with one or more):
-1. From worldly interest to love for satsang
-2. Scriptural clarity made simple
-3. Practical spirituality for daily life
-4. Playful bodh / humour with depth
-5. Personal relevance — "He was speaking to me"
-6. Transformation through one example
-7. Youth receiving satsang in their language
-8. Satsang leading to agna, discipline, or change in conduct
-9. Satsang deepening bhakti or devotion
-10. Satsang revealing Gurudev's dasha, compassion, awareness, or inner state
-11. Early satsang atmosphere / old memories
-12. Satsang as the foundation of Mission growth
+Find every instance where Gurudevshri expressed a vision of what the mission, an ashram, a community, or a project would become — before it existed. For each instance, note: the exact words of the vision as spoken, the setting and approximate year, who was present, and what eventually came to pass that matched or exceeded what He described.`,
 
-Do not include general bhakti, seva, youth, tribute, or infrastructure stories unless satsang is central to the moment.`,
+  bk_compassion_seva: `${BK_BASE}
+
+Find every instance that reveals Gurudevshri's compassion — toward animals, the ill, the poor, children, strangers, or devotees in distress. For each instance, note: who or what was the recipient of the compassion, the specific action or words Gurudevshri used, whether He planted the impulse for seva in a devotee, and how that compassion extended beyond the moment into ongoing action or mission work.`,
+
+  bk_children_teaching: `${BK_BASE}
+
+Find every instance involving children — either Gurudevshri as a child teaching others, or Gurudevshri teaching children through games, play, stories, or informal settings in His later years. For each instance, note: the age of Gurudevshri or the children involved, the specific activity or game, the teaching that was woven into it, and whether the child grew up to carry that teaching forward.`,
+
+  bk_satsang_transformation: `${BK_BASE}
+
+Find every instance where a devotee describes how attending satsang — a single session or over time — changed them, answered an unspoken question, dissolved a habit or addiction, or resolved a life situation without the devotee explicitly asking for help. For each instance, note: what the devotee's inner state or outer situation was before the satsang, what was spoken in satsang, what shifted, and whether the transformation was immediate or gradual.`,
+
+  bk_love_for_pkd: `${BK_BASE}
+
+Find every instance that reveals the depth of Gurudevshri's personal devotion to Param Krupalu Dev — through bhakti, through how He speaks about Him, through the intensity of His practice, through how He transmitted that love to others. For each instance, note: the specific words, actions, or expressions of devotion, the setting, the devotee witnessing it, and what it conveyed about the nature of His relationship with Param Krupalu Dev.`,
+
+  bk_letters_mails: `${BK_BASE}
+
+Find every instance involving a letter or written communication — a letter written by Gurudevshri to a devotee, a letter a devotee received in a moment of crisis, a patrank being read aloud, or the practice of mail replies before sleep. For each instance, note: who the letter was to or from, the occasion or need that prompted it, any specific words quoted or remembered, and what the letter meant to the person who received it.`,
 }
 
 const BK_GENERAL_SUFFIX = `
@@ -224,37 +179,13 @@ Return ONLY structured blocks in this exact format:
 STORY [1]
 STORY_ID: <INITIALS>-<N>
 STORY_TITLE: <short cinematic title>
-THEME_BUCKET: <one or more: Devotion to Param Krupalu Dev | Bhakti | Satsang | Personal Guidance / Agna | Visionary / Spiritual Infrastructure | Guiding Youth | Dasha / Inner State | Seva | Children and Legacy | Tributes / External Perspective>
-STORY_TYPE: <transformation | agna | satsang | bhakti | seva | youth | dasha | humour | crisis | family | mystical>
+CATEGORY: <category key — e.g. bk_first_meeting>
+STORY_TYPE: <transformation | agna | satsang | bhakti | seva | youth | dasha | humour | crisis | family | mystical | vision | compassion | letter | object | correction>
 TIME_LIFE_STAGE: <year, decade, or life stage — "not specified" if unknown>
-LOCATION: <place — "not specified" if unknown>
-SUMMARY: <2-line editorial summary>
-WHAT_HAPPENED: <concrete incident with specific details>
-WHAT_GURUDEV_SAID: <exact words if available — "exact wording not available" if not>
-TRANSFORMATION: <before state, inner shift, after state — "none evident" if not present>
-
-STORY [2]
-...
-
-If nothing found: NO_STORIES_FOUND`
-
-const BK_SAT_SUFFIX = `
-
-Return ONLY structured blocks in this exact format:
-
-STORY [1]
-STORY_ID: <INITIALS>-SAT-<N>
-PERSON: <speaker or person whose story this is>
-STORY_TITLE: <short cinematic title>
-MAIN_THEME_BUCKET: <one from: Devotion to Param Krupalu Dev | Bhakti | Satsang | Personal Guidance / Agna | Visionary / Spiritual Infrastructure | Guiding Youth | Dasha / Inner State | Seva | Children and Legacy | Tributes / External Perspective>
-SATSANG_SUB_THEME: <one or more sub-themes from the list above>
-STORY_TYPE: <transformation | satsang | teaching | humour | youth | agna | bhakti | dasha | practical wisdom | scriptural clarity>
-TIME_LIFE_STAGE: <year, era, or life stage — "not specified" if unknown>
 LOCATION: <place — "not specified" if unknown>
 SUMMARY: <2-line editorial summary>
 WHAT_HAPPENED: <concrete incident with specific details — avoid generic praise>
 WHAT_GURUDEV_SAID: <exact words if available — "exact wording not available" if not>
-SATSANG_INSIGHT: <the spiritual point, teaching, or understanding that emerged>
 TRANSFORMATION: <before state, inner shift, after state — "none evident" if not present>
 QUOTE_CLIP_POTENTIAL: <High | Medium | Low | Needs Review>
 
@@ -266,7 +197,6 @@ If nothing found: NO_STORIES_FOUND`
 interface ParsedBKStory {
   story_id: string
   story_title: string
-  theme_buckets: string[]
   story_type: string
   time_life_stage: string
   location: string
@@ -274,44 +204,30 @@ interface ParsedBKStory {
   what_happened: string
   what_gurudev_said: string
   transformation: string
-  // satsang-deep only
-  person?: string
-  main_theme_bucket?: string
-  satsang_sub_themes?: string[]
-  satsang_insight?: string
-  quote_clip_potential?: string
-  // meta
+  quote_clip_potential: string
   category: string
   source_type: 'bapa_katha'
 }
 
 function parseBKResponse(text: string, category: string): ParsedBKStory[] {
   if (!text || text.includes('NO_STORIES_FOUND')) return []
-  const isSatDeep = category === 'bk_satsang_deep'
   const blocks = text.split(/STORY\s*\[\d+\]/i).slice(1)
   return blocks.flatMap(block => {
     const title = fieldValue(block, 'STORY_TITLE')
     if (!title) return []
     const story: ParsedBKStory = {
-      story_id:         fieldValue(block, 'STORY_ID'),
-      story_title:      title,
-      theme_buckets:    parseList(fieldValue(block, 'THEME_BUCKET')),
-      story_type:       fieldValue(block, 'STORY_TYPE'),
-      time_life_stage:  fieldValue(block, 'TIME_LIFE_STAGE') || 'not specified',
-      location:         fieldValue(block, 'LOCATION') || 'not specified',
-      summary:          fieldValue(block, 'SUMMARY'),
-      what_happened:    fieldValue(block, 'WHAT_HAPPENED'),
+      story_id:          fieldValue(block, 'STORY_ID'),
+      story_title:       title,
+      story_type:        fieldValue(block, 'STORY_TYPE'),
+      time_life_stage:   fieldValue(block, 'TIME_LIFE_STAGE') || 'not specified',
+      location:          fieldValue(block, 'LOCATION') || 'not specified',
+      summary:           fieldValue(block, 'SUMMARY'),
+      what_happened:     fieldValue(block, 'WHAT_HAPPENED'),
       what_gurudev_said: fieldValue(block, 'WHAT_GURUDEV_SAID') || 'exact wording not available',
-      transformation:   fieldValue(block, 'TRANSFORMATION') || 'none evident',
+      transformation:    fieldValue(block, 'TRANSFORMATION') || 'none evident',
+      quote_clip_potential: fieldValue(block, 'QUOTE_CLIP_POTENTIAL') || 'Needs Review',
       category,
       source_type: 'bapa_katha',
-    }
-    if (isSatDeep) {
-      story.person               = fieldValue(block, 'PERSON')
-      story.main_theme_bucket    = fieldValue(block, 'MAIN_THEME_BUCKET')
-      story.satsang_sub_themes   = parseList(fieldValue(block, 'SATSANG_SUB_THEME'))
-      story.satsang_insight      = fieldValue(block, 'SATSANG_INSIGHT')
-      story.quote_clip_potential = fieldValue(block, 'QUOTE_CLIP_POTENTIAL')
     }
     return [story]
   })
@@ -319,14 +235,11 @@ function parseBKResponse(text: string, category: string): ParsedBKStory[] {
 
 // ─── Shared helpers ──────────────────────────────────────────────────────────
 
-function askNotebook(notebookId: string, prompt: string, googleAccessToken?: string): Promise<string> {
+function askNotebook(notebookId: string, prompt: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const proc = spawn(PYTHON, [ASK_SCRIPT, notebookId, prompt], {
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: {
-        ...process.env,
-        ...(googleAccessToken ? { GOOGLE_ACCESS_TOKEN: googleAccessToken } : {}),
-      },
+      env: process.env,
     })
     let stdout = ''
     proc.stdout.on('data', (d: Buffer) => { stdout += d.toString() })
@@ -351,8 +264,6 @@ function evt(data: object): string {
 
 export async function POST(req: NextRequest) {
   const { notebook_ids, categories, bapa_katha_ids = [] } = await req.json()
-  const session = await getServerSession()
-  const googleAccessToken = (session as any)?.access_token as string | undefined
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -374,13 +285,12 @@ export async function POST(req: NextRequest) {
             try {
               let prompt: string
               if (isBK) {
-                const suffix = cat === 'bk_satsang_deep' ? BK_SAT_SUFFIX : BK_GENERAL_SUFFIX
-                prompt = (BK_PROMPTS[cat] || `${BK_BASE}\n\nExtract all ${cat.replace('bk_', '')} stories.`) + suffix
+                prompt = (BK_PROMPTS[cat] || `${BK_BASE}\n\nExtract all ${cat.replace('bk_', '')} stories.`) + BK_GENERAL_SUFFIX
               } else {
                 prompt = (PROMPTS[cat] || `Extract all ${cat} incidents.`) + PROMPT_SUFFIX
               }
 
-              const answer = await askNotebook(nbId, prompt, googleAccessToken)
+              const answer = await askNotebook(nbId, prompt)
               const now = new Date()
 
               if (isBK) {
