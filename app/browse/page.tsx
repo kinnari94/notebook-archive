@@ -1,188 +1,384 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
-import IncidentCard from '@/components/IncidentCard'
+import { useState, useEffect, useMemo, useCallback } from 'react'
+import {
+  Search, MapPin, Users, RotateCcw, Compass, X,
+  ChevronDown, LayoutGrid, List, ArrowUpDown, Filter, BarChart3,
+} from 'lucide-react'
+import IncidentCard, { CATEGORY_COLORS } from '@/components/IncidentCard'
 import BKStoryCard from '@/components/BKStoryCard'
 
-const STANDARD_CATEGORIES = [
-  { key: 'daily_dateline',          label: 'Daily Dateline' },
-  { key: 'health_aahar_discipline', label: 'Health & Discipline' },
-  { key: 'spiritual_exp',           label: 'Spiritual Experiences' },
-  { key: 'teachings_guidance',      label: 'Teachings & Guidance' },
-  { key: 'people_encounters',       label: 'People & Encounters' },
-  { key: 'travels_journeys',        label: 'Travels & Journeys' },
-  { key: 'institutional_timeline',  label: 'Institutional' },
-  { key: 'seva_projects',           label: 'Seva Projects' },
-  { key: 'awards_accreds',          label: 'Awards & Recognition' },
-  { key: 'physical_spaces',         label: 'Physical Spaces' },
-  { key: 'social_contextual',       label: 'Social & Contextual' },
-  { key: 'life_formation',          label: 'Life Formation' },
-  { key: 'artifacts',               label: 'Artifacts' },
-]
+// ─── Category meta ────────────────────────────────────────────────────────────
 
-const BK_CATEGORIES = [
-  { key: 'bk_line_that_changed_me',   label: 'The Line That Changed Me' },
-  { key: 'bk_shared_events',          label: 'Shared Events' },
-  { key: 'bk_first_meeting',          label: 'First Meeting' },
-  { key: 'bk_humour',                 label: 'Humorous Prasangs' },
-  { key: 'bk_one_ajna',               label: 'One Ajna / Guidance' },
-  { key: 'bk_the_object',             label: 'The Object' },
-  { key: 'bk_discipline_training',    label: 'Discipline / Training' },
-  { key: 'bk_dasha_family',           label: 'Dasha / Family Observations' },
-  { key: 'bk_non_jain',               label: "Non-Jain in Bapa's Circle" },
-  { key: 'bk_he_found_me_first',      label: 'He Found Me First' },
-  { key: 'bk_he_doesnt_see_time',     label: "He Doesn't See Time" },
-  { key: 'bk_vision_behind_projects', label: 'Vision Behind Projects' },
-  { key: 'bk_compassion_seva',        label: 'Compassion / Seva' },
-  { key: 'bk_children_teaching',      label: 'Children / Teaching Through Play' },
-  { key: 'bk_satsang_transformation', label: 'Satsang / Transformation' },
-  { key: 'bk_love_for_pkd',           label: 'Love for PKD / Bhakti' },
-  { key: 'bk_letters_mails',          label: 'Letters / Mails' },
-]
+// Standard categories resolved from the shared CATEGORY_COLORS map
+const STANDARD_CATEGORIES = CATEGORY_COLORS
+
+const BK_CATEGORIES: Record<string, { label: string; accent: string }> = {
+  bk_line_that_changed_me:  { label: 'The Line That Changed Me',         accent: '#92400E' },
+  bk_shared_events:         { label: 'Shared Events',                    accent: '#1D4ED8' },
+  bk_first_meeting:         { label: 'First Meeting',                    accent: '#BE185D' },
+  bk_humour:                { label: 'Humorous Prasangs',                accent: '#B45309' },
+  bk_one_ajna:              { label: 'One Ajna / Guidance',              accent: '#4338CA' },
+  bk_the_object:            { label: 'The Object',                       accent: '#57534E' },
+  bk_discipline_training:   { label: 'Discipline / Training',            accent: '#B91C1C' },
+  bk_dasha_family:          { label: 'Dasha / Family Observations',      accent: '#6D28D9' },
+  bk_non_jain:              { label: "Non-Jain in Bapa's Circle",        accent: '#0F766E' },
+  bk_he_found_me_first:     { label: 'He Found Me First',                accent: '#065F46' },
+  bk_he_doesnt_see_time:    { label: "He Doesn't See Time",              accent: '#0E7490' },
+  bk_vision_behind_projects:{ label: 'Vision Behind Projects',           accent: '#7C3AED' },
+  bk_compassion_seva:       { label: 'Compassion / Seva',                accent: '#15803D' },
+  bk_children_teaching:     { label: 'Children / Teaching Through Play', accent: '#BE185D' },
+  bk_satsang_transformation:{ label: 'Satsang / Transformation',         accent: '#A21CAF' },
+  bk_love_for_pkd:          { label: 'Love for PKD / Bhakti',            accent: '#C2410C' },
+  bk_letters_mails:         { label: 'Letters / Mails',                  accent: '#0369A1' },
+}
 
 type Source = 'standard' | 'bapa_katha'
-const PAGE_SIZE = 20
+
+// ─── Browse page ──────────────────────────────────────────────────────────────
 
 export default function Browse() {
-  const [source,   setSource]   = useState<Source>('standard')
-  const [category, setCategory] = useState('')
-  const [person,   setPerson]   = useState('')
-  const [location, setLocation] = useState('')
-  const [yearFrom, setYearFrom] = useState('')
-  const [yearTo,   setYearTo]   = useState('')
-  const [page,     setPage]     = useState(0)
-  const [people,   setPeople]   = useState<string[]>([])
-  const [locations,setLocations]= useState<string[]>([])
-  const [results,  setResults]  = useState<{ total: number; incidents: unknown[] }>({ total: 0, incidents: [] })
-  const [loading,  setLoading]  = useState(false)
+  const [source,          setSource]          = useState<Source>('standard')
+  const [allIncidents,    setAllIncidents]    = useState<any[]>([])
+  const [people,          setPeople]          = useState<string[]>([])
+  const [locations,       setLocations]       = useState<string[]>([])
+  const [loading,         setLoading]         = useState(false)
 
-  const activeCategoryOptions = source === 'bapa_katha' ? BK_CATEGORIES : STANDARD_CATEGORIES
+  const [searchKeyword,   setSearchKeyword]   = useState('')
+  const [selectedCategory,setSelectedCategory]= useState('')
+  const [searchPerson,    setSearchPerson]    = useState('')
+  const [searchLocation,  setSearchLocation]  = useState('')
+  const [yearFrom,        setYearFrom]        = useState('')
+  const [yearTo,          setYearTo]          = useState('')
+  const [sortSequence,    setSortSequence]    = useState<'asc' | 'desc'>('asc')
+  const [layoutMode,      setLayoutMode]      = useState<'grid' | 'list'>('grid')
+  const [visibleCount,    setVisibleCount]    = useState(12)
+
+  const activeCategoryMeta = source === 'bapa_katha' ? BK_CATEGORIES : STANDARD_CATEGORIES
+
+  // Fetch a large batch whenever source changes
+  const fetchAll = useCallback(async (src: Source) => {
+    setLoading(true)
+    setAllIncidents([])
+    try {
+      const params = new URLSearchParams({ limit: '500', skip: '0', source: src })
+      const d = await fetch(`/api/incidents?${params}`).then(r => r.json())
+      setAllIncidents(d.incidents || [])
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { fetchAll(source) }, [source, fetchAll])
 
   useEffect(() => {
     fetch('/api/people').then(r => r.json()).then(d => setPeople(d.people || []))
     fetch('/api/locations').then(r => r.json()).then(d => setLocations(d.locations || []))
   }, [])
 
-  const fetchIncidents = useCallback(async (p = 0) => {
-    setLoading(true)
-    const params = new URLSearchParams({ limit: String(PAGE_SIZE), skip: String(p * PAGE_SIZE), source })
-    if (category) params.set('category', category)
-    if (person)   params.set('person',   person)
-    if (location) params.set('location', location)
-    if (yearFrom) params.set('year_from', yearFrom)
-    if (yearTo)   params.set('year_to',   yearTo)
-    try {
-      const d = await fetch(`/api/incidents?${params}`).then(r => r.json())
-      setResults({ total: 0, incidents: [], ...d })
-    } finally {
-      setLoading(false)
+  const clearFilters = () => {
+    setSearchKeyword(''); setSelectedCategory(''); setSearchPerson('')
+    setSearchLocation(''); setYearFrom(''); setYearTo(''); setVisibleCount(12)
+  }
+
+  const handleSourceChange = (s: Source) => { setSource(s); clearFilters() }
+
+  // Category counts from loaded data
+  const categoryStats = useMemo(() => {
+    const stats: Record<string, number> = {}
+    allIncidents.forEach(inc => { if (inc.category) stats[inc.category] = (stats[inc.category] || 0) + 1 })
+    return stats
+  }, [allIncidents])
+
+  const availableCategories = useMemo(() => Object.keys(categoryStats).sort(), [categoryStats])
+
+  // Client-side filter + sort
+  const filteredIncidents = useMemo(() => {
+    let result = [...allIncidents]
+    if (selectedCategory) result = result.filter(i => i.category === selectedCategory)
+    if (searchKeyword) {
+      const q = searchKeyword.toLowerCase()
+      result = result.filter(i =>
+        i.description?.toLowerCase().includes(q) ||
+        i.source_chunk?.toLowerCase().includes(q) ||
+        i.story_title?.toLowerCase().includes(q) ||
+        i.what_happened?.toLowerCase().includes(q) ||
+        i.category?.toLowerCase().replace(/_/g, ' ').includes(q)
+      )
     }
-  }, [source, category, person, location, yearFrom, yearTo])
+    if (searchPerson) {
+      const q = searchPerson.toLowerCase()
+      result = result.filter(i => i.people?.some((p: string) => p.toLowerCase().includes(q)))
+    }
+    if (searchLocation) {
+      const q = searchLocation.toLowerCase()
+      result = result.filter(i => i.locations?.some((l: string) => l.toLowerCase().includes(q)))
+    }
+    if (yearFrom) result = result.filter(i => i.date?.year && i.date.year >= parseInt(yearFrom))
+    if (yearTo)   result = result.filter(i => i.date?.year && i.date.year <= parseInt(yearTo))
+    result.sort((a, b) => {
+      const ya = a.date?.year ?? 9999, yb = b.date?.year ?? 9999
+      return sortSequence === 'asc' ? ya - yb : yb - ya
+    })
+    return result
+  }, [allIncidents, selectedCategory, searchKeyword, searchPerson, searchLocation, yearFrom, yearTo, sortSequence])
 
-  useEffect(() => { fetchIncidents(0); setPage(0) }, [fetchIncidents])
+  const visibleIncidents = useMemo(() => filteredIncidents.slice(0, visibleCount), [filteredIncidents, visibleCount])
 
-  const handleSourceChange = (s: Source) => { setSource(s); setCategory('') }
-
-  const totalPages = Math.ceil(results.total / PAGE_SIZE)
+  const hasActiveFilters = selectedCategory || searchKeyword || searchPerson || searchLocation || yearFrom || yearTo
 
   return (
-    <div className="p-8">
-      <div className="mb-6">
-        <h1 className="font-serif text-3xl font-bold text-ink">Browse Archive</h1>
-        <p className="text-muted text-sm mt-1">{results.total.toLocaleString()} incidents found</p>
-      </div>
+    <div className="min-h-screen bg-[#faf8f5] text-[#1c1917] pb-24 px-4 sm:px-6 lg:px-8 pt-8">
 
-      {/* Source toggle */}
-      <div className="flex gap-2 mb-4">
-        <button onClick={() => handleSourceChange('standard')}
-          className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
-            source === 'standard' ? 'bg-ink text-white' : 'bg-white border border-border text-muted hover:bg-cream'
-          }`}>
-          Standard
-        </button>
-        <button onClick={() => handleSourceChange('bapa_katha')}
-          className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
-            source === 'bapa_katha' ? 'bg-amber-500 text-white' : 'bg-white border border-border text-muted hover:bg-cream'
-          }`}>
-          Bapa Katha
-        </button>
-      </div>
-
-      {/* Filters */}
-      <div className="bg-white border border-border rounded-2xl p-5 mb-6 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-        <div>
-          <label className="block text-xs font-medium text-muted mb-1.5">Category</label>
-          <select value={category} onChange={e => setCategory(e.target.value)}
-            className="w-full px-3 py-2 rounded-xl border border-border bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-ember/30">
-            <option value="">All categories</option>
-            {activeCategoryOptions.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-muted mb-1.5">Person</label>
-          <input list="people-list" value={person} onChange={e => setPerson(e.target.value)}
-            placeholder="Search people…"
-            className="w-full px-3 py-2 rounded-xl border border-border bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-ember/30" />
-          <datalist id="people-list">{people.map(p => <option key={p} value={p} />)}</datalist>
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-muted mb-1.5">Location</label>
-          <input list="loc-list" value={location} onChange={e => setLocation(e.target.value)}
-            placeholder="Search locations…"
-            className="w-full px-3 py-2 rounded-xl border border-border bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-ember/30" />
-          <datalist id="loc-list">{locations.map(l => <option key={l} value={l} />)}</datalist>
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-muted mb-1.5">Year From</label>
-          <input type="number" value={yearFrom} onChange={e => setYearFrom(e.target.value)}
-            placeholder="e.g. 1940"
-            className="w-full px-3 py-2 rounded-xl border border-border bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-ember/30" />
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-muted mb-1.5">Year To</label>
-          <input type="number" value={yearTo} onChange={e => setYearTo(e.target.value)}
-            placeholder="e.g. 2024"
-            className="w-full px-3 py-2 rounded-xl border border-border bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-ember/30" />
-        </div>
-      </div>
-
-      {loading ? (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {[...Array(6)].map((_, i) => <div key={i} className="bg-white rounded-2xl border border-border p-5 h-40 animate-pulse" />)}
-        </div>
-      ) : results.incidents.length === 0 ? (
-        <div className="text-center py-20 text-muted">
-          <p className="text-4xl mb-3">📭</p>
-          <p className="font-medium">No incidents match your filters</p>
-          <p className="text-sm mt-1">Try removing some filters</p>
-        </div>
-      ) : (
-        <>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-            {results.incidents.map((inc) => {
-              const item = inc as { _id: string; source_type?: string }
-              return item.source_type === 'bapa_katha'
-                ? <BKStoryCard key={item._id} story={item as any} />
-                : <IncidentCard key={item._id} incident={item as any} />
-            })}
-          </div>
-          {totalPages > 1 && (
-            <div className="flex items-center justify-center gap-3">
-              <button disabled={page === 0}
-                onClick={() => { const p = page - 1; setPage(p); fetchIncidents(p) }}
-                className="p-2 rounded-xl border border-border bg-white hover:bg-cream disabled:opacity-40 transition-colors">
-                <ChevronLeft className="w-4 h-4" />
+      {/* Header */}
+      <header className="max-w-7xl mx-auto mb-8">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6 pb-6 border-b border-[#eae4da]/80">
+          <h1 className="font-serif text-3xl sm:text-4xl font-bold tracking-tight text-[#1C3D27] leading-none">
+            Browse Archive
+          </h1>
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Source toggle */}
+            <div className="bg-[#f3eee5] p-1 rounded-lg flex items-center border border-[#eae4da]">
+              <button onClick={() => handleSourceChange('standard')}
+                className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${source === 'standard' ? 'bg-white text-[#1c1917] shadow-sm' : 'text-stone-500 hover:text-stone-800'}`}>
+                Standard Records
               </button>
-              <span className="text-sm text-muted">Page {page + 1} of {totalPages}</span>
-              <button disabled={page >= totalPages - 1}
-                onClick={() => { const p = page + 1; setPage(p); fetchIncidents(p) }}
-                className="p-2 rounded-xl border border-border bg-white hover:bg-cream disabled:opacity-40 transition-colors">
-                <ChevronRight className="w-4 h-4" />
+              <button onClick={() => handleSourceChange('bapa_katha')}
+                className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${source === 'bapa_katha' ? 'bg-white text-[#1c1917] shadow-sm' : 'text-stone-500 hover:text-stone-800'}`}>
+                Bapa Katha
               </button>
             </div>
+          </div>
+        </div>
+      </header>
+
+      {/* Category pills */}
+      <section className="max-w-7xl mx-auto mb-6">
+        <div className="flex items-center gap-2 mb-2 text-xs font-bold text-stone-500 font-mono">
+          <BarChart3 className="w-3.5 h-3.5" />
+          <span>CATEGORY</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 p-3 bg-[#eae4da]/15 rounded-xl border border-[#eae4da]/50">
+          <button onClick={() => { setSelectedCategory(''); setVisibleCount(12) }}
+            className={`px-3.5 py-1 rounded-full text-[11px] font-semibold border transition-all uppercase tracking-wider ${
+              selectedCategory === '' ? 'bg-[#564940] text-white border-[#564940]' : 'bg-white text-stone-600 hover:bg-[#FAF6F1] border-[#E9E4DF]'
+            }`}>
+            All ({allIncidents.length})
+          </button>
+          {availableCategories.map(cat => {
+            const normCat = cat.toLowerCase().replace(/\s+/g, '_').trim()
+            const meta = activeCategoryMeta[normCat] ?? activeCategoryMeta[cat]
+            const accent = meta?.accent || '#78716c'
+            const label = meta?.label || cat.replace(/_/g, ' ')
+            const isSelected = selectedCategory === cat
+            return (
+              <button key={cat} onClick={() => { setSelectedCategory(isSelected ? '' : cat); setVisibleCount(12) }}
+                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-medium border transition-all uppercase tracking-wider ${
+                  isSelected ? 'font-bold scale-[1.02]' : 'bg-white hover:bg-stone-50 border-[#E9E4DF]'
+                }`}
+                style={isSelected
+                  ? { backgroundColor: accent + '15', color: accent, borderColor: accent }
+                  : { color: accent }
+                }>
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: accent }} />
+                {label}
+                <span className={`text-[10px] font-mono px-1 rounded-sm ${isSelected ? 'bg-white/70 text-stone-800' : 'bg-stone-100/70 text-stone-400'}`}>
+                  {categoryStats[cat] || 0}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      </section>
+
+      <main className="max-w-7xl mx-auto">
+
+        {/* Filter panel */}
+        <section className="bg-white rounded-2xl border border-[#eae4da] p-5 sm:p-6 mb-8 shadow-sm">
+          <div className="flex items-center justify-between mb-4 pb-3 border-b border-[#eae4da]/40">
+            <div className="flex items-center gap-2">
+              <Filter className="w-4 h-4 text-[#1C3D27]" />
+              <h3 className="font-serif text-[#1C3D27] text-base font-bold">Filters</h3>
+            </div>
+            {hasActiveFilters && (
+              <button onClick={clearFilters}
+                className="text-xs font-bold text-rose-600 hover:text-rose-800 flex items-center gap-1">
+                <RotateCcw className="w-3.5 h-3.5" /> Reset
+              </button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            {/* Keyword */}
+            <div className="flex flex-col gap-1 sm:col-span-2">
+              <label className="text-[11px] font-bold text-stone-500 tracking-wide uppercase">Keyword Search</label>
+              <div className="relative">
+                <input type="text" placeholder="Search descriptions, transcripts…"
+                  value={searchKeyword}
+                  onChange={e => { setSearchKeyword(e.target.value); setVisibleCount(12) }}
+                  className="w-full bg-[#fcfbfa] text-[#1c1917] placeholder-stone-400 rounded-lg pl-3 pr-8 py-2 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#1C3D27] border border-[#E9E4DF]" />
+                {searchKeyword
+                  ? <button onClick={() => setSearchKeyword('')} className="absolute right-2.5 top-2.5 text-stone-400 hover:text-stone-700"><X className="w-3.5 h-3.5" /></button>
+                  : <Search className="absolute right-2.5 top-2.5 w-3.5 h-3.5 text-stone-400/80" />}
+              </div>
+            </div>
+
+            {/* Person */}
+            <div className="flex flex-col gap-1">
+              <label className="text-[11px] font-bold text-stone-500 tracking-wide uppercase">Person</label>
+              <div className="relative">
+                <select value={searchPerson} onChange={e => { setSearchPerson(e.target.value); setVisibleCount(12) }}
+                  className="w-full bg-[#fcfbfa] text-[#1c1917] rounded-lg px-3 py-2 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#1C3D27] appearance-none pr-8 border border-[#E9E4DF]">
+                  <option value="">All People</option>
+                  {people.map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-2.5 top-2.5 w-3.5 h-3.5 text-stone-400" />
+              </div>
+            </div>
+
+            {/* Location */}
+            <div className="flex flex-col gap-1">
+              <label className="text-[11px] font-bold text-stone-500 tracking-wide uppercase">Location</label>
+              <div className="relative">
+                <select value={searchLocation} onChange={e => { setSearchLocation(e.target.value); setVisibleCount(12) }}
+                  className="w-full bg-[#fcfbfa] text-[#1c1917] rounded-lg px-3 py-2 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#1C3D27] appearance-none pr-8 border border-[#E9E4DF]">
+                  <option value="">All Locations</option>
+                  {locations.map(l => <option key={l} value={l}>{l}</option>)}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-2.5 top-2.5 w-3.5 h-3.5 text-stone-400" />
+              </div>
+            </div>
+
+            {/* Year range */}
+            <div className="flex flex-col gap-1">
+              <label className="text-[11px] font-bold text-stone-500 tracking-wide uppercase">Year Range</label>
+              <div className="flex items-center gap-1.5">
+                <input type="number" placeholder="From" value={yearFrom}
+                  onChange={e => { setYearFrom(e.target.value); setVisibleCount(12) }}
+                  className="w-1/2 bg-[#fcfbfa] text-[#1c1917] placeholder-stone-400 text-center rounded-lg py-2 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#1C3D27] border border-[#E9E4DF] font-mono" />
+                <span className="text-stone-400 text-[10px] font-bold">–</span>
+                <input type="number" placeholder="To" value={yearTo}
+                  onChange={e => { setYearTo(e.target.value); setVisibleCount(12) }}
+                  className="w-1/2 bg-[#fcfbfa] text-[#1c1917] placeholder-stone-400 text-center rounded-lg py-2 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#1C3D27] border border-[#E9E4DF] font-mono" />
+              </div>
+            </div>
+          </div>
+
+          {/* Active filter tags */}
+          {hasActiveFilters && (
+            <div className="mt-4 pt-3 border-t border-stone-100 flex flex-wrap items-center gap-2">
+              <span className="text-[10px] font-bold text-stone-400 uppercase tracking-widest font-mono">Active:</span>
+              {searchKeyword && (
+                <span className="inline-flex items-center gap-1 bg-indigo-50 text-indigo-800 px-2.5 py-0.5 rounded-full text-[11px] font-medium border border-indigo-100">
+                  "{searchKeyword}" <button onClick={() => setSearchKeyword('')}><X className="w-3 h-3" /></button>
+                </span>
+              )}
+              {selectedCategory && (
+                <span className="inline-flex items-center gap-1 bg-stone-100 text-stone-800 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border border-stone-200">
+                  {(activeCategoryMeta[selectedCategory.toLowerCase().replace(/\s+/g, '_')] ?? activeCategoryMeta[selectedCategory])?.label || selectedCategory.replace(/_/g, ' ')}
+                  <button onClick={() => setSelectedCategory('')}><X className="w-3 h-3" /></button>
+                </span>
+              )}
+              {searchPerson && (
+                <span className="inline-flex items-center gap-1 bg-sky-50 text-sky-800 px-2.5 py-0.5 rounded-full text-[11px] font-medium border border-sky-100">
+                  <Users className="w-3 h-3" />{searchPerson} <button onClick={() => setSearchPerson('')}><X className="w-3 h-3" /></button>
+                </span>
+              )}
+              {searchLocation && (
+                <span className="inline-flex items-center gap-1 bg-teal-50 text-teal-800 px-2.5 py-0.5 rounded-full text-[11px] font-medium border border-teal-100">
+                  <MapPin className="w-3 h-3" />{searchLocation} <button onClick={() => setSearchLocation('')}><X className="w-3 h-3" /></button>
+                </span>
+              )}
+              {(yearFrom || yearTo) && (
+                <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-900 px-2.5 py-0.5 rounded-full text-[11px] font-mono font-medium border border-amber-100">
+                  {yearFrom || '…'} – {yearTo || '…'}
+                  <button onClick={() => { setYearFrom(''); setYearTo('') }}><X className="w-3 h-3" /></button>
+                </span>
+              )}
+            </div>
           )}
-        </>
-      )}
+        </section>
+
+        {/* Results bar */}
+        <section className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+          <h2 className="font-serif text-xl sm:text-2xl font-bold italic text-stone-800">
+            {loading ? 'Loading…' : filteredIncidents.length === 0 ? 'No results' : `${filteredIncidents.length} Records`}
+            {hasActiveFilters && !loading && (
+              <span className="ml-2 text-xs text-stone-400 bg-stone-100 py-0.5 px-2 rounded-full font-mono not-italic">filtered</span>
+            )}
+          </h2>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setSortSequence(p => p === 'asc' ? 'desc' : 'asc')}
+              className="px-3 py-1.5 text-xs font-semibold text-stone-700 bg-white border border-stone-200 rounded-lg hover:bg-stone-50 flex items-center gap-1">
+              <ArrowUpDown className="w-3.5 h-3.5 text-stone-400" />
+              {sortSequence === 'asc' ? 'Oldest First' : 'Newest First'}
+            </button>
+            <div className="flex items-center bg-white border border-stone-200 rounded-lg p-0.5">
+              <button onClick={() => setLayoutMode('grid')}
+                className={`p-1.5 rounded transition-all ${layoutMode === 'grid' ? 'bg-stone-100 text-stone-900' : 'text-stone-400 hover:text-stone-600'}`}>
+                <LayoutGrid className="w-4 h-4" />
+              </button>
+              <button onClick={() => setLayoutMode('list')}
+                className={`p-1.5 rounded transition-all ${layoutMode === 'list' ? 'bg-stone-100 text-stone-900' : 'text-stone-400 hover:text-stone-600'}`}>
+                <List className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </section>
+
+        {/* Cards */}
+        <section>
+          {loading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {[...Array(6)].map((_, i) => <div key={i} className="bg-white rounded-2xl border border-[#eae4da] h-48 animate-pulse" />)}
+            </div>
+          ) : filteredIncidents.length === 0 ? (
+            <div className="bg-white border border-[#eae4da]/90 rounded-2xl p-16 text-center max-w-lg mx-auto space-y-4">
+              <div className="w-12 h-12 rounded-full bg-[#fdfaf2] text-stone-400 flex items-center justify-center mx-auto border border-[#eae4da]">
+                <Compass className="w-5 h-5 stroke-[1.5]" />
+              </div>
+              <h3 className="text-base font-serif font-bold text-stone-800">No records matched your filters</h3>
+              <p className="text-stone-500 text-sm">Try removing one or more active filters.</p>
+              <button onClick={clearFilters}
+                className="px-4 py-2 bg-[#1c1917] text-white rounded-lg text-xs font-bold inline-flex items-center gap-1.5 hover:bg-stone-800">
+                <RotateCcw className="w-3.5 h-3.5" /> Clear All
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className={layoutMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 gap-6' : 'space-y-4'}>
+                {visibleIncidents.map((inc: any) =>
+                  inc.source_type === 'bapa_katha'
+                    ? <BKStoryCard key={inc._id} story={inc} layout={layoutMode} highlightQuery={searchKeyword} />
+                    : <IncidentCard key={inc._id} incident={inc} layout={layoutMode} highlightQuery={searchKeyword} />
+                )}
+              </div>
+
+              {filteredIncidents.length > visibleCount && (
+                <div className="mt-12 text-center">
+                  <div className="inline-block bg-white border border-stone-200 rounded-full px-4 py-2 mb-3">
+                    <span className="text-xs text-stone-500">
+                      Viewing <span className="font-bold font-mono text-stone-800">{visibleCount}</span> of{' '}
+                      <span className="font-bold font-mono text-stone-800">{filteredIncidents.length}</span>
+                    </span>
+                  </div>
+                  <div>
+                    <button onClick={() => setVisibleCount(v => v + 12)}
+                      className="px-6 py-2.5 bg-stone-900 hover:bg-stone-800 text-white rounded-full text-xs font-bold inline-flex items-center gap-2">
+                      Load more
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </section>
+      </main>
+
+      <footer className="max-w-7xl mx-auto mt-24 pt-8 border-t border-stone-200/60 text-center">
+        <p className="text-[10px] font-mono text-stone-400 uppercase tracking-widest">
+          Pujya Gurudevshri Biographical Archive
+        </p>
+      </footer>
     </div>
   )
 }

@@ -1,27 +1,47 @@
-import { MapPin, Clock, ExternalLink } from 'lucide-react'
+'use client'
+import { useState } from 'react'
+import { ExternalLink, Check, Copy } from 'lucide-react'
 
-const BK_CATEGORY_META: Record<string, { color: string; bg: string; icon: string; label: string }> = {
-  bk_line_that_changed_me:  { color: 'text-amber-800',   bg: 'bg-amber-50',   icon: '💬', label: 'The Line That Changed Me' },
-  bk_shared_events:         { color: 'text-blue-700',    bg: 'bg-blue-50',    icon: '🤝', label: 'Shared Events' },
-  bk_first_meeting:         { color: 'text-rose-700',    bg: 'bg-rose-50',    icon: '🌅', label: 'First Meeting' },
-  bk_humour:                { color: 'text-yellow-700',  bg: 'bg-yellow-50',  icon: '😄', label: 'Humorous Prasangs' },
-  bk_one_ajna:              { color: 'text-indigo-700',  bg: 'bg-indigo-50',  icon: '🧭', label: 'One Ajna / Guidance' },
-  bk_the_object:            { color: 'text-stone-700',   bg: 'bg-stone-50',   icon: '📿', label: 'The Object' },
-  bk_discipline_training:   { color: 'text-red-700',     bg: 'bg-red-50',     icon: '⚖️', label: 'Discipline / Training' },
-  bk_dasha_family:          { color: 'text-violet-700',  bg: 'bg-violet-50',  icon: '✨', label: 'Dasha / Family Observations' },
-  bk_non_jain:              { color: 'text-teal-700',    bg: 'bg-teal-50',    icon: '🌍', label: 'Non-Jain in Bapa\'s Circle' },
-  bk_he_found_me_first:     { color: 'text-emerald-700', bg: 'bg-emerald-50', icon: '🔍', label: 'He Found Me First' },
-  bk_he_doesnt_see_time:    { color: 'text-cyan-700',    bg: 'bg-cyan-50',    icon: '🌙', label: 'He Doesn\'t See Time' },
-  bk_vision_behind_projects:{ color: 'text-purple-700',  bg: 'bg-purple-50',  icon: '🏛️', label: 'Vision Behind Projects' },
-  bk_compassion_seva:       { color: 'text-green-700',   bg: 'bg-green-50',   icon: '🌱', label: 'Compassion / Seva' },
-  bk_children_teaching:     { color: 'text-pink-700',    bg: 'bg-pink-50',    icon: '👶', label: 'Children / Teaching Through Play' },
-  bk_satsang_transformation:{ color: 'text-fuchsia-700', bg: 'bg-fuchsia-50', icon: '📖', label: 'Satsang / Transformation' },
-  bk_love_for_pkd:          { color: 'text-orange-700',  bg: 'bg-orange-50',  icon: '🙏', label: 'Love for PKD / Bhakti' },
-  bk_letters_mails:         { color: 'text-sky-700',     bg: 'bg-sky-50',     icon: '✉️', label: 'Letters / Mails' },
+const BK_CATEGORY_COLORS: Record<string, { label: string; icon: string; accent: string }> = {
+  bk_line_that_changed_me:  { label: 'The Line That Changed Me',         icon: '💬', accent: '#92400E' },
+  bk_shared_events:         { label: 'Shared Events',                    icon: '🤝', accent: '#1D4ED8' },
+  bk_first_meeting:         { label: 'First Meeting',                    icon: '🌅', accent: '#BE185D' },
+  bk_humour:                { label: 'Humorous Prasangs',                icon: '😄', accent: '#B45309' },
+  bk_one_ajna:              { label: 'One Ajna / Guidance',              icon: '🧭', accent: '#4338CA' },
+  bk_the_object:            { label: 'The Object',                       icon: '📿', accent: '#57534E' },
+  bk_discipline_training:   { label: 'Discipline / Training',            icon: '⚖️', accent: '#B91C1C' },
+  bk_dasha_family:          { label: 'Dasha / Family Observations',      icon: '✨', accent: '#6D28D9' },
+  bk_non_jain:              { label: "Non-Jain in Bapa's Circle",        icon: '🌍', accent: '#0F766E' },
+  bk_he_found_me_first:     { label: 'He Found Me First',                icon: '🔍', accent: '#065F46' },
+  bk_he_doesnt_see_time:    { label: "He Doesn't See Time",              icon: '🌙', accent: '#0E7490' },
+  bk_vision_behind_projects:{ label: 'Vision Behind Projects',           icon: '🏛️', accent: '#7C3AED' },
+  bk_compassion_seva:       { label: 'Compassion / Seva',                icon: '🌱', accent: '#15803D' },
+  bk_children_teaching:     { label: 'Children / Teaching Through Play', icon: '👶', accent: '#BE185D' },
+  bk_satsang_transformation:{ label: 'Satsang / Transformation',         icon: '📖', accent: '#A21CAF' },
+  bk_love_for_pkd:          { label: 'Love for PKD / Bhakti',            icon: '🙏', accent: '#C2410C' },
+  bk_letters_mails:         { label: 'Letters / Mails',                  icon: '✉️', accent: '#0369A1' },
+}
+
+function HighlightText({ text, highlight }: { text: string; highlight?: string }) {
+  if (!text) return null
+  if (!highlight?.trim()) return <>{text}</>
+  const escaped = highlight.trim().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')
+  const regex = new RegExp(`(${escaped})`, 'gi')
+  const parts = text.split(regex)
+  return (
+    <>
+      {parts.map((part, i) =>
+        regex.test(part)
+          ? <mark key={i} className="bg-amber-200 text-stone-900 py-0.5 px-0.5 rounded font-semibold">{part}</mark>
+          : part
+      )}
+    </>
+  )
 }
 
 interface BKStory {
   _id: string
+  story_id?: string
   story_title?: string
   summary?: string
   what_happened?: string
@@ -35,79 +55,184 @@ interface BKStory {
   nlm_source_links?: { source_id: string; cited_text: string; nlm_url: string }[]
 }
 
-export default function BKStoryCard({ story }: { story: BKStory }) {
-  const meta = BK_CATEGORY_META[story.category || ''] ?? { color: 'text-amber-800', bg: 'bg-amber-50', icon: '📖', label: story.category || 'Bapa Katha' }
+interface Props {
+  story: BKStory
+  layout?: 'grid' | 'list'
+  highlightQuery?: string
+}
+
+export default function BKStoryCard({ story, layout = 'grid', highlightQuery = '' }: Props) {
+  const [isCopied, setIsCopied] = useState(false)
+  const [isBodyExpanded, setIsBodyExpanded] = useState(false)
+
+  const meta = BK_CATEGORY_COLORS[story.category || ''] ?? {
+    label: (story.category || 'Bapa Katha').replace(/bk_/g, '').replace(/_/g, ' '),
+    icon: '📖',
+    accent: '#92400E',
+  }
+
+  const displayId = story.story_id ? `#${story.story_id}` : 'REF-' + story._id.slice(-6).toUpperCase()
+  const body = story.what_happened || story.summary || ''
   const hasGurudevWords = story.what_gurudev_said && story.what_gurudev_said !== 'exact wording not available'
   const hasTransformation = story.transformation && story.transformation !== 'none evident'
+  const copyText = [story.story_title, body].filter(Boolean).join('\n\n')
 
-  return (
-    <div className="bg-white rounded-2xl border border-amber-100 p-5 hover:shadow-md transition-shadow">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-3 mb-3">
-        <div className="flex flex-wrap gap-1.5">
-          <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${meta.bg} ${meta.color}`}>
-            <span>{meta.icon}</span>{meta.label}
-          </span>
-          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
-            Bapa Katha
-          </span>
-          {story.story_type && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs text-gray-600 bg-gray-100">
-              {story.story_type}
-            </span>
+  const handleCopy = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    navigator.clipboard.writeText(copyText)
+    setIsCopied(true)
+    setTimeout(() => setIsCopied(false), 2000)
+  }
+
+  // ── LIST layout ──────────────────────────────────────────────────────────
+  if (layout === 'list') {
+    return (
+      <div className="group relative bg-[#FDFBF9] border border-[#E9E4DF] rounded-[14px] p-4 transition-all duration-150 flex flex-col md:flex-row md:items-center gap-4 hover:bg-[#FAF6F1] hover:border-[#D6CEC5]">
+        <div className="shrink-0 md:w-24 select-none">
+          {story.time_life_stage && story.time_life_stage !== 'not specified'
+            ? <span className="font-sans font-semibold text-xs text-[#564940] bg-[#F5EFEB] px-2.5 py-1 rounded-full border border-[#E6DAD1]">{story.time_life_stage}</span>
+            : <span className="font-sans text-[11px] font-medium text-[#A6978C] bg-[#FAF7F2] px-2.5 py-1 rounded-full border border-[#E9E1D8]">Bapa Katha</span>
+          }
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <div className="flex flex-wrap items-center gap-2 mb-1 text-[11px] font-sans font-bold select-none text-[#564940]">
+            <span className="w-2 h-2 rounded-full inline-block shrink-0" style={{ backgroundColor: meta.accent }} />
+            <span className="uppercase tracking-wide">{meta.label}</span>
+            <span className="text-[#D0C0B4]">/</span>
+            <span className="text-[#A1958C] font-normal font-mono">{displayId}</span>
+            {story.quote_clip_potential && story.quote_clip_potential !== 'Low' && (
+              <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold ${story.quote_clip_potential === 'High' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                {story.quote_clip_potential} clip
+              </span>
+            )}
+          </div>
+          {story.story_title && (
+            <p className="font-sans text-[#2C2117] text-[14.5px] leading-relaxed font-light tracking-wide mb-1">
+              <HighlightText text={story.story_title} highlight={highlightQuery} />
+            </p>
+          )}
+          {body && (
+            <div className="pl-3 border-l-2 border-[#D4C3B5]">
+              <p className="text-[#645A51] text-[12.5px] leading-relaxed italic font-sans font-light">
+                "<HighlightText text={body} highlight={highlightQuery} />"
+              </p>
+            </div>
+          )}
+          {story.location && story.location !== 'not specified' && (
+            <div className="mt-1.5 flex items-center gap-1 text-[10px] font-mono text-stone-500">
+              📍{story.location}
+            </div>
           )}
         </div>
-        {story.quote_clip_potential && story.quote_clip_potential !== 'Low' && (
-          <span className={`shrink-0 text-xs px-2 py-0.5 rounded-full font-medium ${
-            story.quote_clip_potential === 'High' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
-          }`}>
-            {story.quote_clip_potential} clip
-          </span>
+
+        <div className="flex items-center gap-3 text-[11px] font-sans font-medium shrink-0 select-none">
+          <button onClick={handleCopy} className="text-[#645A51] hover:text-[#2C2117] transition-colors cursor-pointer">
+            {isCopied ? '[copied ✓]' : '[copy]'}
+          </button>
+          {story.nlm_source_links?.[0] && (
+            <a href={story.nlm_source_links[0].nlm_url} target="_blank" rel="noopener noreferrer"
+              className="text-[#794E2C] hover:text-[#533013] hover:underline transition-colors">
+              source ↗
+            </a>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // ── GRID layout ──────────────────────────────────────────────────────────
+  return (
+    <div className="group relative bg-[#FDFBF9] border border-[#E9E4DF] rounded-[24px] p-6 transition-all duration-300 hover:bg-[#FAF6F1] flex flex-col justify-between h-full hover:shadow-[0_12px_36px_rgba(118,91,73,0.06)] hover:border-[#D6CEC5] hover:-translate-y-1 overflow-hidden">
+      {/* Accent glow */}
+      <div className="absolute top-0 right-0 w-32 h-32 blur-[40px] opacity-[0.04] group-hover:opacity-[0.08] transition-opacity duration-300 rounded-full pointer-events-none" style={{ backgroundColor: meta.accent }} />
+
+      <div>
+        {/* Status bar */}
+        <div className="flex items-center justify-between gap-2 mb-4 pb-2 border-b border-[#F2ECE6]">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="w-2 h-2 rounded-full inline-block shrink-0" style={{ backgroundColor: meta.accent }} />
+            <span className="text-[11px] font-sans font-bold text-[#564940] uppercase tracking-widest">{meta.label}</span>
+            {story.story_type && (
+              <span className="text-[10px] font-mono text-[#A1958C] bg-[#F5EFEB] px-1.5 py-0.5 rounded border border-[#E6DAD1]">{story.story_type}</span>
+            )}
+            {story.quote_clip_potential && story.quote_clip_potential !== 'Low' && (
+              <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold ${story.quote_clip_potential === 'High' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                {story.quote_clip_potential} clip
+              </span>
+            )}
+          </div>
+          <span className="text-[10px] font-sans font-medium text-[#A1958C] tracking-wide shrink-0">{displayId}</span>
+        </div>
+
+        {/* Time / location */}
+        {(story.time_life_stage && story.time_life_stage !== 'not specified') && (
+          <div className="mb-3">
+            <span className="bg-[#F5EFEB] text-[#564940] px-2.5 py-0.5 rounded border border-[#E6DAD1] text-[11px] font-sans font-bold">
+              {story.time_life_stage}
+              {story.location && story.location !== 'not specified' && (
+                <span className="ml-1.5 text-[10px] font-normal text-[#A1958C]">· {story.location}</span>
+              )}
+            </span>
+          </div>
+        )}
+
+        {/* Story title */}
+        {story.story_title && (
+          <div className="mb-4">
+            <p className="font-sans text-[#2C2117] text-[14.5px] leading-relaxed antialiased font-light tracking-wide">
+              <HighlightText text={story.story_title} highlight={highlightQuery} />
+            </p>
+          </div>
+        )}
+
+        {/* Body */}
+        {body && (
+          <div className="mb-4 pl-3 border-l-2 border-[#D4C3B5]">
+            <p className={`font-sans font-light text-[#645A51] text-[13px] leading-relaxed italic ${!isBodyExpanded ? 'line-clamp-2' : ''}`}>
+              "<HighlightText text={body} highlight={highlightQuery} />"
+            </p>
+            {body.length > 90 && (
+              <button onClick={e => { e.stopPropagation(); setIsBodyExpanded(v => !v) }}
+                className="mt-1 text-[11px] font-semibold text-[#2b6cb0] hover:text-[#1a4976] transition-colors hover:underline">
+                {isBodyExpanded ? 'Collapse' : 'Show Full Story'}
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Gurudev's words */}
+        {hasGurudevWords && (
+          <div className="mb-4 pl-3 border-l-2 border-[#C4A882] bg-[#FBF7F2] py-1.5 rounded-r-lg">
+            <p className="font-sans font-normal text-[#3D2B1A] text-[13px] leading-relaxed italic">
+              "{story.what_gurudev_said}"
+            </p>
+          </div>
+        )}
+
+        {/* Transformation */}
+        {hasTransformation && (
+          <div className="mb-4 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2 text-[12px] text-emerald-800">
+            <span className="font-bold">Transformation: </span>{story.transformation}
+          </div>
         )}
       </div>
 
-      {/* Title */}
-      {story.story_title && (
-        <h3 className="font-serif font-semibold text-ink text-sm mb-2 leading-snug">{story.story_title}</h3>
-      )}
-
-      {/* Summary */}
-      {story.summary && (
-        <p className="text-sm text-muted leading-relaxed mb-3">{story.summary}</p>
-      )}
-
-      {/* Gurudev's words */}
-      {hasGurudevWords && (
-        <blockquote className="border-l-2 border-amber-300 pl-3 text-xs text-ink italic mb-3 line-clamp-3">
-          "{story.what_gurudev_said}"
-        </blockquote>
-      )}
-
-      {/* Transformation */}
-      {hasTransformation && (
-        <div className="text-xs bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2 mb-3 text-emerald-800">
-          <span className="font-medium">Transformation: </span>{story.transformation}
-        </div>
-      )}
-
-      {/* Meta row */}
-      <div className="flex flex-wrap items-center gap-3 text-xs text-muted mt-2">
-        {story.time_life_stage && story.time_life_stage !== 'not specified' && (
-          <span className="flex items-center gap-1">
-            <Clock className="w-3 h-3" />{story.time_life_stage}
-          </span>
-        )}
-        {story.location && story.location !== 'not specified' && (
-          <span className="flex items-center gap-1">
-            <MapPin className="w-3 h-3" />{story.location}
-          </span>
-        )}
-        {story.nlm_source_links && story.nlm_source_links.length > 0 && (
-          <a href={story.nlm_source_links[0].nlm_url} target="_blank" rel="noopener noreferrer"
-            className="ml-auto flex items-center gap-1 text-blue-500 hover:text-blue-700 transition-colors">
-            <ExternalLink className="w-3 h-3" />View in source
-          </a>
-        )}
+      {/* Actions */}
+      <div className="flex items-center justify-between gap-2 pt-2.5 border-t border-[#F2ECE6] text-[11px] font-sans font-bold">
+        <button onClick={handleCopy} className="text-[#645A51] hover:text-[#2C2117] transition-colors flex items-center gap-1 cursor-pointer select-none">
+          {isCopied
+            ? <><Check className="w-3 h-3 stroke-[2.5]" /> copied ✓</>
+            : <><Copy className="w-3 h-3" /> copy story</>
+          }
+        </button>
+        {story.nlm_source_links?.[0]
+          ? <a href={story.nlm_source_links[0].nlm_url} target="_blank" rel="noopener noreferrer"
+              className="text-[#794E2C] hover:text-[#533013] transition-colors flex items-center gap-1 hover:underline">
+              source ↗
+            </a>
+          : <span className="text-[10px] text-[#A6978C] font-mono font-medium">local.db</span>
+        }
       </div>
     </div>
   )
