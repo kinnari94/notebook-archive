@@ -95,8 +95,10 @@ interface Incident {
   date?: { year?: number; period?: string; precision?: string }
   people?: string[]
   locations?: string[]
+  tags?: string[]
   source_chunk?: string
   verified?: boolean
+  source_notebook_title?: string
   nlm_source_links?: { source_id: string; cited_text: string; nlm_url: string }[]
 }
 
@@ -132,10 +134,10 @@ const meta = CATEGORY_COLORS[normCat] ?? CATEGORY_COLORS[incident.category || ''
     return (
       <div className="group relative bg-[#FDFBF9] border border-[#E9E4DF] rounded-[14px] p-4 transition-all duration-150 flex flex-col md:flex-row md:items-center gap-4 hover:bg-[#FAF6F1] hover:border-[#D6CEC5]">
         <div className="shrink-0 md:w-24 select-none">
-          {incident.date?.year
+          {(incident.date?.period || incident.date?.year)
             ? <span className="font-sans font-semibold text-xs px-2.5 py-1 rounded-full border"
                 style={{ backgroundColor: meta.accent + '12', color: meta.accent, borderColor: meta.accent + '30' }}>
-                {incident.date.year}
+                {incident.date?.period || incident.date?.year}
               </span>
             : <span className="font-sans text-[11px] font-medium text-[#A6978C] bg-[#FAF7F2] px-2.5 py-1 rounded-full border border-[#E9E1D8]">Undated</span>
           }
@@ -177,6 +179,11 @@ const meta = CATEGORY_COLORS[normCat] ?? CATEGORY_COLORS[incident.category || ''
         </div>
 
         <div className="flex items-center gap-3 text-[11px] font-sans font-medium shrink-0 select-none">
+          {incident.source_notebook_title && (
+            <span className="text-[10px] font-mono text-[#A1958C] truncate max-w-[100px]" title={incident.source_notebook_title}>
+              📓 {incident.source_notebook_title}
+            </span>
+          )}
           <button onClick={handleCopy} className="text-[#645A51] hover:text-[#2C2117] transition-colors cursor-pointer">
             {isCopied ? '[copied ✓]' : '[copy]'}
           </button>
@@ -200,23 +207,18 @@ const meta = CATEGORY_COLORS[normCat] ?? CATEGORY_COLORS[incident.category || ''
       <div>
         {/* Status bar */}
         <div className="flex items-center justify-between gap-2 mb-4 pb-2 border-b border-[#F2ECE6]">
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 flex-wrap">
             <span className="w-2 h-2 rounded-full inline-block shrink-0" style={{ backgroundColor: meta.accent }} />
             <span className="text-[11px] font-sans font-bold text-[#564940] uppercase tracking-widest">{meta.label}</span>
+            {(incident.date?.period || incident.date?.year) && (
+              <span className="text-[11px] font-sans font-bold px-2 py-0.5 rounded border ml-1"
+                style={{ backgroundColor: meta.accent + '12', color: meta.accent, borderColor: meta.accent + '30' }}>
+                {incident.date?.period || incident.date?.year}
+              </span>
+            )}
           </div>
-          <span className="text-[10px] font-sans font-medium text-[#A1958C] tracking-wide">{refId}</span>
+          <span className="text-[10px] font-sans font-medium text-[#A1958C] tracking-wide shrink-0">{refId}</span>
         </div>
-
-        {/* Year */}
-        {incident.date?.year && (
-          <div className="mb-3">
-            <span className="text-[11px] font-sans font-bold px-2.5 py-0.5 rounded border"
-              style={{ backgroundColor: meta.accent + '12', color: meta.accent, borderColor: meta.accent + '30' }}>
-              {incident.date.year}
-              {incident.date.period && <span className="ml-1.5 text-[10px] font-normal opacity-70 uppercase tracking-wide">· {incident.date.period}</span>}
-            </span>
-          </div>
-        )}
 
         {/* Description */}
         <div className="mb-4">
@@ -243,6 +245,17 @@ const meta = CATEGORY_COLORS[normCat] ?? CATEGORY_COLORS[incident.category || ''
       </div>
 
       <div>
+        {/* Free-form tags */}
+        {incident.tags && incident.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1 mb-3">
+            {incident.tags.map((tag, i) => (
+              <span key={i} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-stone-100 text-stone-500 border border-stone-200/60">
+                {tag}
+              </span>
+            ))}
+          </div>
+        )}
+
         {/* People & location tags — tinted with category accent */}
         {(incident.people?.length || incident.locations?.length) ? (
           <div className="flex flex-wrap gap-1.5 mb-4 select-none">
@@ -269,13 +282,20 @@ const meta = CATEGORY_COLORS[normCat] ?? CATEGORY_COLORS[incident.category || ''
               : <><Copy className="w-3 h-3" /> copy bio</>
             }
           </button>
-          {incident.nlm_source_links?.[0]
-            ? <a href={incident.nlm_source_links[0].nlm_url} target="_blank" rel="noopener noreferrer"
-                className="text-[#794E2C] hover:text-[#533013] transition-colors flex items-center gap-1 hover:underline">
-                source ↗
-              </a>
-            : <span className="text-[10px] text-[#A6978C] font-mono font-medium">local.db</span>
-          }
+          <div className="flex items-center gap-3 ml-auto">
+            {incident.source_notebook_title && (
+              <span className="text-[10px] font-mono text-[#A1958C] truncate max-w-[120px]" title={incident.source_notebook_title}>
+                📓 {incident.source_notebook_title}
+              </span>
+            )}
+            {incident.nlm_source_links?.[0]
+              ? <a href={incident.nlm_source_links[0].nlm_url} target="_blank" rel="noopener noreferrer"
+                  className="text-[#794E2C] hover:text-[#533013] transition-colors hover:underline">
+                  source ↗
+                </a>
+              : <span className="text-[10px] text-[#A6978C] font-mono font-medium">local.db</span>
+            }
+          </div>
         </div>
       </div>
     </div>

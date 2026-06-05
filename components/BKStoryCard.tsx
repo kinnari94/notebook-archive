@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { ExternalLink, Check, Copy } from 'lucide-react'
+import { Check, Copy } from 'lucide-react'
 
 const BK_CATEGORY_COLORS: Record<string, { label: string; icon: string; accent: string }> = {
   bk_line_that_changed_me:  { label: 'The Line That Changed Me',         icon: '💬', accent: '#92400E' },
@@ -52,6 +52,7 @@ interface BKStory {
   location?: string
   category?: string
   quote_clip_potential?: string
+  source_notebook_title?: string
   nlm_source_links?: { source_id: string; cited_text: string; nlm_url: string }[]
 }
 
@@ -127,6 +128,11 @@ export default function BKStoryCard({ story, layout = 'grid', highlightQuery = '
         </div>
 
         <div className="flex items-center gap-3 text-[11px] font-sans font-medium shrink-0 select-none">
+          {story.source_notebook_title && (
+            <span className="text-[10px] font-mono text-[#A1958C] truncate max-w-[100px]" title={story.source_notebook_title}>
+              📓 {story.source_notebook_title}
+            </span>
+          )}
           <button onClick={handleCopy} className="text-[#645A51] hover:text-[#2C2117] transition-colors cursor-pointer">
             {isCopied ? '[copied ✓]' : '[copy]'}
           </button>
@@ -226,13 +232,20 @@ export default function BKStoryCard({ story, layout = 'grid', highlightQuery = '
             : <><Copy className="w-3 h-3" /> copy story</>
           }
         </button>
-        {story.nlm_source_links?.[0]
-          ? <a href={story.nlm_source_links[0].nlm_url} target="_blank" rel="noopener noreferrer"
-              className="text-[#794E2C] hover:text-[#533013] transition-colors flex items-center gap-1 hover:underline">
-              source ↗
-            </a>
-          : <span className="text-[10px] text-[#A6978C] font-mono font-medium">local.db</span>
-        }
+        <div className="flex items-center gap-3 ml-auto">
+          {story.source_notebook_title && (
+            <span className="text-[10px] font-mono text-[#A1958C] truncate max-w-[120px]" title={story.source_notebook_title}>
+              📓 {story.source_notebook_title}
+            </span>
+          )}
+          {story.nlm_source_links?.[0]
+            ? <a href={story.nlm_source_links[0].nlm_url} target="_blank" rel="noopener noreferrer"
+                className="text-[#794E2C] hover:text-[#533013] transition-colors hover:underline">
+                source ↗
+              </a>
+            : <span className="text-[10px] text-[#A6978C] font-mono font-medium">local.db</span>
+          }
+        </div>
       </div>
     </div>
   )

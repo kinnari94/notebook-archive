@@ -35,7 +35,7 @@ export default function Search() {
   return (
     <div className="p-8">
       <div className="mb-8">
-        <h1 className="font-serif text-3xl font-bold text-ink mb-1">Search Archive</h1>
+        <h1 className="font-serif text-3xl font-bold text-[#1C3D27] mb-1">Search Archive</h1>
         <p className="text-muted text-sm">Full-text search across all incidents</p>
       </div>
 

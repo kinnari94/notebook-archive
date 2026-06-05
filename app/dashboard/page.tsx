@@ -33,7 +33,7 @@ export default function Dashboard() {
     <div className="p-8">
       <div className="mb-8 flex items-start justify-between">
         <div>
-          <h1 className="font-serif text-3xl font-bold text-ink mb-1">Archive Overview</h1>
+          <h1 className="font-serif text-3xl font-bold text-[#1C3D27] mb-1">Archive Overview</h1>
           <p className="text-muted text-sm">Bapaji · SRMD Spiritual Biography</p>
         </div>
         <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium ${

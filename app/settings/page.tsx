@@ -71,7 +71,7 @@ export default function Settings() {
   return (
     <div className="p-8 max-w-2xl">
       <div className="mb-8">
-        <h1 className="font-serif text-3xl font-bold text-ink">Settings</h1>
+        <h1 className="font-serif text-3xl font-bold text-[#1C3D27]">Settings</h1>
         <p className="text-muted text-sm mt-1">Configure your archive connection and tools</p>
       </div>
 

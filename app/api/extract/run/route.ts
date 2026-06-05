@@ -15,21 +15,40 @@ const PYTHON = process.platform === 'win32' ? 'python' : 'python3'
 
 // ─── Standard extraction ────────────────────────────────────────────────────
 
+// IMPORTANT SUBJECT CONTEXT — must be applied to ALL prompts:
+// • Param Krupalu Dev (also known as Shrimad Rajchandra) lived 1867–1901. Any incident dated in
+//   that range refers to HIM, not to Gurudevshri.
+// • Pujya Gurudevshri (also known as Gurudev) was born in 1966. Incidents from 1966 onward
+//   may refer to him. Never attribute a pre-1966 incident to Gurudevshri.
+// • When the source text is ambiguous about who is being referred to, use the date to decide:
+//   1867–1901 → Param Krupalu Dev. 1966–present → Pujya Gurudevshri.
+
+const SUBJECT_CONTEXT = `IMPORTANT — Two distinct subjects appear in these sources:
+1. Param Krupalu Dev (Shrimad Rajchandra): lived 1867–1901. Any incident, teaching, or event from that period refers to HIM.
+2. Pujya Gurudevshri (Gurudev): born 1966. Incidents from 1966 onward may refer to Him.
+Never attribute a pre-1966 incident to Pujya Gurudevshri. Use the year to decide who is the subject.`
+
 const PROMPTS: Record<string, string> = {
-  daily_dateline:           'Extract all chronological dateline events — meetings, ceremonies, inaugurations, daily routines — of Gurudev / Pujya Gurudevshri only. Do not include events of disciples, visitors, or other individuals.',
-  health_aahar_discipline:  'Extract all mentions of Gurudev\'s / Pujya Gurudevshri\'s physical health, dietary practices, fasting, sleep patterns, and physical discipline. Do not include health mentions of others.',
-  spiritual_exp:            'Extract Gurudev\'s / Pujya Gurudevshri\'s mystical experiences, samadhi states, meditation milestones, divine visions, and spiritual breakthroughs. Do not include experiences attributed to disciples or devotees.',
-  teachings_guidance:       'Extract satsangs, pravachans, philosophical discourses, and spiritual instructions given by Gurudev / Pujya Gurudevshri to disciples. Do not include teachings by others.',
-  people_encounters:        'Extract first meetings, dikshas, and notable interactions where Gurudev / Pujya Gurudevshri is the central figure — with disciples, visitors, and public figures.',
-  travels_journeys:         'Extract all travel — pilgrimages, yatras, national and international visits, journeys — undertaken by Gurudev / Pujya Gurudevshri. Do not include travel of others unless Gurudev was present.',
-  institutional_timeline:   'Extract founding dates, organizational milestones, governance events, and institutional changes led or initiated by Gurudev / Pujya Gurudevshri or the Mission under his direction.',
-  seva_projects:            'Extract community service, education, healthcare, disaster relief, and social welfare initiatives undertaken by Gurudev / Pujya Gurudevshri or the Mission under his leadership.',
-  awards_accreds:           'Extract awards, honours, government recognition, honorary degrees, and public acknowledgements received by Gurudev / Pujya Gurudevshri. Do not include awards given to others.',
-  physical_spaces:          'Extract ashram construction, land acquisition, temple inaugurations, and infrastructure milestones directed or inaugurated by Gurudev / Pujya Gurudevshri.',
-  social_contextual:        'Extract references to the prevailing social, political, or world conditions during a given time period — such as wars, pandemics (e.g. COVID 2019–2021), famines, political events, or major national/global circumstances — as context for the period in which Gurudev / Pujya Gurudevshri was active. Do not extract Gurudev\'s responses or actions — only the background conditions of the era.',
-  life_formation:           'Extract Gurudev\'s / Pujya Gurudevshri\'s birth, childhood, family background, early education, and formative life events. Do not include biographical details of others.',
-  artifacts:                'Extract personal objects, manuscripts, gifts, sacred items, and notable photographs belonging to or associated with Gurudev / Pujya Gurudevshri.',
+  daily_dateline:           `${SUBJECT_CONTEXT}\n\nExtract all chronological dateline events — meetings, ceremonies, inaugurations, daily routines — of the correct subject (Param Krupalu Dev if 1867–1901, Pujya Gurudevshri if 1966–present). Do not include events of disciples, visitors, or other individuals.`,
+  health_aahar_discipline:  `${SUBJECT_CONTEXT}\n\nExtract all mentions of the subject's physical health, dietary practices, fasting, sleep patterns, and physical discipline — attributing correctly to Param Krupalu Dev (1867–1901) or Pujya Gurudevshri (1966–present). Do not include health mentions of others.`,
+  spiritual_exp:            `${SUBJECT_CONTEXT}\n\nExtract mystical experiences, samadhi states, meditation milestones, divine visions, and spiritual breakthroughs — attributing correctly to Param Krupalu Dev (1867–1901) or Pujya Gurudevshri (1966–present). Do not include experiences of disciples or devotees.`,
+  teachings_guidance:       `${SUBJECT_CONTEXT}\n\nExtract satsangs, pravachans, philosophical discourses, and spiritual instructions — attributing correctly to Param Krupalu Dev (1867–1901) or Pujya Gurudevshri (1966–present). Do not include teachings by others.`,
+  people_encounters:        `${SUBJECT_CONTEXT}\n\nExtract first meetings, dikshas, and notable interactions where the correct subject (Param Krupalu Dev if 1867–1901, Pujya Gurudevshri if 1966–present) is the central figure — with disciples, visitors, and public figures.`,
+  travels_journeys:         `${SUBJECT_CONTEXT}\n\nExtract all travel — pilgrimages, yatras, national and international visits, journeys — undertaken by the correct subject (Param Krupalu Dev if 1867–1901, Pujya Gurudevshri if 1966–present). Do not include travel of others unless the subject was present.`,
+  institutional_timeline:   `${SUBJECT_CONTEXT}\n\nExtract founding dates, organizational milestones, governance events, and institutional changes led or initiated by the correct subject or the Mission under their direction — attributing correctly by date.`,
+  seva_projects:            `${SUBJECT_CONTEXT}\n\nExtract community service, education, healthcare, disaster relief, and social welfare initiatives undertaken by the correct subject (Param Krupalu Dev if 1867–1901, Pujya Gurudevshri if 1966–present) or the Mission under their leadership.`,
+  awards_accreds:           `${SUBJECT_CONTEXT}\n\nExtract awards, honours, government recognition, honorary degrees, and public acknowledgements received by the correct subject — attributing correctly by date. Do not include awards given to others.`,
+  physical_spaces:          `${SUBJECT_CONTEXT}\n\nExtract ashram construction, land acquisition, temple inaugurations, and infrastructure milestones directed or inaugurated by the correct subject (Param Krupalu Dev if 1867–1901, Pujya Gurudevshri if 1966–present).`,
+  social_contextual:        `${SUBJECT_CONTEXT}\n\nExtract references to the prevailing social, political, or world conditions during a given time period — such as wars, pandemics (e.g. COVID 2019–2021), famines, political events, or major national/global circumstances — as context for the era in which the subject (Param Krupalu Dev 1867–1901, or Pujya Gurudevshri 1966–present) was active. Do not extract the subject's responses or actions — only the background conditions of the era.`,
+  life_formation:           `${SUBJECT_CONTEXT}\n\nExtract birth, childhood, family background, early education, and formative life events — attributing correctly to Param Krupalu Dev (born 1867) or Pujya Gurudevshri (born 1966). Do not include biographical details of others.`,
+  artifacts:                `${SUBJECT_CONTEXT}\n\nExtract personal objects, manuscripts, gifts, sacred items, and notable photographs belonging to or associated with the correct subject (Param Krupalu Dev if 1867–1901, Pujya Gurudevshri if 1966–present).`,
 }
+
+const FIXED_CATEGORIES = [
+  'daily_dateline', 'health_aahar_discipline', 'spiritual_exp', 'teachings_guidance',
+  'people_encounters', 'travels_journeys', 'institutional_timeline', 'seva_projects',
+  'awards_accreds', 'physical_spaces', 'social_contextual', 'life_formation', 'artifacts',
+]
 
 const PROMPT_SUFFIX = `
 Return ONLY structured blocks in this exact format:
@@ -40,7 +59,8 @@ DATE: <year, decade, or period>
 DATE_PRECISION: year|decade|period|approximate|unknown
 PEOPLE: <comma-separated names, or NONE>
 LOCATIONS: <comma-separated places, or NONE>
-CATEGORY: <category_key>
+CATEGORY: <choose exactly one from: daily_dateline | health_aahar_discipline | spiritual_exp | teachings_guidance | people_encounters | travels_journeys | institutional_timeline | seva_projects | awards_accreds | physical_spaces | social_contextual | life_formation | artifacts>
+TAGS: <comma-separated specific descriptive tags for this incident, e.g. diksha, samadhi, pilgrimage, fasting — can be anything, multiple allowed, or NONE>
 SOURCE_CHUNK: <exact short quote from source, max 150 chars>
 
 INCIDENT [2]
@@ -54,6 +74,7 @@ interface ParsedIncident {
   people: string[]
   locations: string[]
   category: string
+  tags: string[]
   source_chunk: string
   verified: boolean
   confidence: string
@@ -84,12 +105,16 @@ function parseResponse(text: string, category: string): ParsedIncident[] {
     const desc = fieldValue(block, 'DESCRIPTION')
     if (!desc) return []
     const dateRaw = fieldValue(block, 'DATE')
+    // Enforce fixed category — fall back to the extraction category key if model returned invalid
+    const rawCat = fieldValue(block, 'CATEGORY')
+    const resolvedCat = FIXED_CATEGORIES.includes(rawCat) ? rawCat : category
     return [{
       description: desc,
       date: { year: parseYear(dateRaw), period: dateRaw, precision: fieldValue(block, 'DATE_PRECISION') || 'unknown' },
       people: parseList(fieldValue(block, 'PEOPLE')),
       locations: parseList(fieldValue(block, 'LOCATIONS')),
-      category: fieldValue(block, 'CATEGORY') || category,
+      category: resolvedCat,
+      tags: parseList(fieldValue(block, 'TAGS')),
       source_chunk: fieldValue(block, 'SOURCE_CHUNK'),
       verified: false,
       confidence: 'auto_extracted',
@@ -268,7 +293,7 @@ function evt(data: object): string {
 // ─── POST handler ────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
-  const { notebook_ids, categories, bapa_katha_ids = [] } = await req.json()
+  const { notebook_ids, categories, bapa_katha_ids = [], notebook_titles = {} } = await req.json()
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -283,9 +308,12 @@ export async function POST(req: NextRequest) {
 
         for (const nbId of notebook_ids as string[]) {
           const isBK = (bapa_katha_ids as string[]).includes(nbId)
+          const nbTitle: string = (notebook_titles as Record<string, string>)[nbId] || nbId.slice(0, 8)
+
+          send({ msg: `━━ Notebook: ${nbTitle}${isBK ? ' [Bapa Katha]' : ''}`, level: 'info' })
 
           for (const cat of categories as string[]) {
-            send({ msg: `Querying [${cat}] from notebook ${nbId.slice(0, 8)}…`, level: 'info' })
+            send({ msg: `  Querying [${cat}]…`, level: 'info' })
 
             try {
               let prompt: string
@@ -317,7 +345,7 @@ export async function POST(req: NextRequest) {
                     const hash = contentHash(nbId, cat, story.story_title + story.what_happened.slice(0, 80))
                     const result = await db.collection(COLLECTIONS.bk_stories).updateOne(
                       { contentHash: hash },
-                      { $setOnInsert: { ...story, contentHash: hash, extracted_at: now, source_notebook: nbId, nlm_source_links: nlmSourceLinks } },
+                      { $setOnInsert: { ...story, contentHash: hash, extracted_at: now, source_notebook: nbId, source_notebook_title: nbTitle, nlm_source_links: nlmSourceLinks } },
                       { upsert: true }
                     )
                     if (result.upsertedCount > 0) saved++
@@ -345,7 +373,7 @@ export async function POST(req: NextRequest) {
                     const hash = contentHash(nbId, cat, inc.description)
                     const result = await db.collection(COLLECTIONS.incidents).updateOne(
                       { contentHash: hash },
-                      { $setOnInsert: { ...inc, contentHash: hash, extracted_at: now, source_notebook: nbId, source_type: 'notebooklm', nlm_source_links: nlmSourceLinks } },
+                      { $setOnInsert: { ...inc, contentHash: hash, extracted_at: now, source_notebook: nbId, source_notebook_title: nbTitle, source_type: 'notebooklm', nlm_source_links: nlmSourceLinks } },
                       { upsert: true }
                     )
                     if (result.upsertedCount > 0) saved++

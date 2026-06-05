@@ -1,6 +1,8 @@
 'use client'
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { RefreshCw, Play, CheckCircle, AlertCircle, BookOpen, Loader2 } from 'lucide-react'
+import { RefreshCw, Play, CheckCircle, AlertCircle, BookOpen, Loader2, Minimize2 } from 'lucide-react'
+import { useExtraction } from '@/components/ExtractionContext'
+
 
 const CATEGORIES = [
   { key: 'daily_dateline',          label: 'Daily Dateline',        icon: '📅' },
@@ -43,20 +45,18 @@ function isBKNotebook(title: string): boolean {
 }
 
 interface Notebook { id: string; title: string; source_count: number }
-interface LogLine  { msg: string; level: string; ts: string }
 
 export default function Extract() {
+  const { running, logs, progress, start, minimize, clear } = useExtraction()
+
   const [nlmConnected, setNlmConnected] = useState(false)
   const [nlmChecking, setNlmChecking]   = useState(true)
 
-  const [notebooks, setNotebooks]     = useState<Notebook[]>([])
-  const [nbLoading, setNbLoading]     = useState(false)
-  const [nbError, setNbError]         = useState<string | null>(null)
-  const [selectedNbs, setSelectedNbs] = useState<string[]>([])
+  const [notebooks, setNotebooks]       = useState<Notebook[]>([])
+  const [nbLoading, setNbLoading]       = useState(false)
+  const [nbError, setNbError]           = useState<string | null>(null)
+  const [selectedNbs, setSelectedNbs]   = useState<string[]>([])
   const [selectedCats, setSelectedCats] = useState<string[]>([])
-  const [running, setRunning]         = useState(false)
-  const [logs, setLogs]               = useState<LogLine[]>([])
-  const [progress, setProgress]       = useState<{ done: number; total: number } | null>(null)
   const logsRef = useRef<HTMLDivElement>(null)
 
   const bkIds = selectedNbs.filter(id => {
@@ -91,39 +91,16 @@ export default function Extract() {
     }
   }, [])
 
-  async function runExtraction() {
+  function runExtraction() {
     if (!selectedNbs.length || !selectedCats.length) return
-    setRunning(true); setLogs([]); setProgress(null)
-    try {
-      const res = await fetch('/api/extract/run', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          notebook_ids: selectedNbs,
-          categories:   selectedCats,
-          bapa_katha_ids: bkIds,
-        }),
-      })
-      const reader = res.body!.getReader()
-      const dec = new TextDecoder()
-      let buf = ''
-      while (true) {
-        const { value, done } = await reader.read()
-        if (done) break
-        buf += dec.decode(value, { stream: true })
-        const parts = buf.split('\n\n')
-        buf = parts.pop() ?? ''
-        for (const part of parts) {
-          const line = part.replace(/^data:\s*/, '').trim()
-          if (!line) continue
-          try {
-            const ev = JSON.parse(line)
-            if (ev.msg) setLogs(p => [...p, { msg: ev.msg, level: ev.level || 'info', ts: new Date().toLocaleTimeString() }])
-            if (ev.progress !== undefined) setProgress({ done: ev.progress, total: ev.total })
-          } catch { /* skip */ }
-        }
-      }
-    } finally { setRunning(false) }
+    start({
+      notebook_ids: selectedNbs,
+      categories:   selectedCats,
+      bapa_katha_ids: bkIds,
+      notebook_titles: Object.fromEntries(
+        notebooks.filter(n => selectedNbs.includes(n.id)).map(n => [n.id, n.title])
+      ),
+    })
   }
 
   const toggleNb  = (id: string) => {
@@ -139,7 +116,7 @@ export default function Extract() {
   return (
     <div className="p-8">
       <div className="mb-8">
-        <h1 className="font-serif text-3xl font-bold text-ink">Extract Content</h1>
+        <h1 className="font-serif text-3xl font-bold text-[#1C3D27]">Extract Content</h1>
         <p className="text-muted text-sm mt-1">Pull incidents from NotebookLM into the archive</p>
       </div>
 
@@ -287,13 +264,25 @@ export default function Extract() {
               <div className="flex items-center gap-2 px-5 py-3 border-b border-forest-light">
                 <span className="text-sm font-medium text-white">Extraction Log</span>
                 {progress && (
-                  <div className="ml-auto flex items-center gap-3">
+                  <div className="flex items-center gap-3 ml-4">
                     <div className="h-1.5 w-32 bg-forest-light rounded-full overflow-hidden">
                       <div className="h-full bg-mint rounded-full transition-all" style={{ width: `${(progress.done / progress.total) * 100}%` }} />
                     </div>
                     <span className="text-xs text-green-300">{progress.done}/{progress.total}</span>
                   </div>
                 )}
+                <div className="ml-auto flex items-center gap-2">
+                  <button onClick={minimize} title="Minimize — extraction continues in background"
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-xs text-white transition-colors">
+                    <Minimize2 className="w-3.5 h-3.5" /> Minimize
+                  </button>
+                  {!running && (
+                    <button onClick={clear}
+                      className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-xs text-white transition-colors">
+                      Clear
+                    </button>
+                  )}
+                </div>
               </div>
               <div ref={logsRef} className="p-5 h-64 overflow-y-auto font-mono text-xs space-y-1">
                 {logs.map((l, i) => (

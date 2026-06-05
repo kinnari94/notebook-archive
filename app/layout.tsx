@@ -4,6 +4,8 @@ import './globals.css'
 import Sidebar from '@/components/Sidebar'
 import { getServerSession } from 'next-auth'
 import SessionProvider from '@/components/SessionProvider'
+import { ExtractionProvider } from '@/components/ExtractionContext'
+import ExtractionBar from '@/components/ExtractionBar'
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
 const playfair = Playfair_Display({ subsets: ['latin'], variable: '--font-playfair' })
@@ -20,12 +22,15 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html lang="en">
       <body className={`${inter.variable} ${playfair.variable} font-sans`}>
         <SessionProvider session={session}>
-          {session?.user && (
-            <Sidebar user={{ email: session.user.email }} />
-          )}
-          <main className={session?.user ? 'ml-60 min-h-screen' : 'min-h-screen'}>
-            {children}
-          </main>
+          <ExtractionProvider>
+            {session?.user && (
+              <Sidebar user={{ email: session.user.email }} />
+            )}
+            <main className={session?.user ? 'ml-60 min-h-screen' : 'min-h-screen'}>
+              {children}
+            </main>
+            <ExtractionBar />
+          </ExtractionProvider>
         </SessionProvider>
       </body>
     </html>

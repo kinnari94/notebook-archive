@@ -72,7 +72,7 @@ export default function Timeline() {
   return (
     <div className="p-8">
       <div className="mb-6">
-        <h1 className="font-serif text-3xl font-bold text-ink">Timeline</h1>
+        <h1 className="font-serif text-3xl font-bold text-[#1C3D27]">Timeline</h1>
         <p className="text-muted text-sm mt-1">
           {filtered.length} years · {filtered.reduce((s, y) => s + y.count, 0).toLocaleString()} incidents
         </p>
