@@ -2,16 +2,17 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut } from 'next-auth/react'
-import { LayoutDashboard, BookOpen, Search, Clock, FlaskConical, Settings, Archive, LogOut } from 'lucide-react'
+import { LayoutDashboard, BookOpen, Search, Clock, FlaskConical, Settings, Archive, LogOut, Package } from 'lucide-react'
 
 
 const nav = [
-  { href: '/dashboard', label: 'Dashboard',  icon: LayoutDashboard },
-  { href: '/browse',    label: 'Browse',      icon: BookOpen },
-  { href: '/search',    label: 'Search',      icon: Search },
-  { href: '/timeline',  label: 'Timeline',    icon: Clock },
-  { href: '/extract',   label: 'Extract',     icon: FlaskConical },
-  { href: '/settings',  label: 'Settings',    icon: Settings },
+  { href: '/dashboard',   label: 'Dashboard',   icon: LayoutDashboard },
+  { href: '/browse',      label: 'Browse',       icon: BookOpen },
+  { href: '/search',      label: 'Search',       icon: Search },
+  { href: '/timeline',    label: 'Timeline',     icon: Clock },
+  { href: '/collections', label: 'Collections',  icon: Package },
+  { href: '/extract',     label: 'Extract',      icon: FlaskConical },
+  { href: '/settings',    label: 'Settings',     icon: Settings },
 ]
 
 interface User { email?: string | null }
