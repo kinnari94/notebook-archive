@@ -51,7 +51,7 @@ interface BKStory {
   time_life_stage?: string
   location?: string
   category?: string
-  quote_clip_potential?: string
+  tags?: string[]
   source_notebook_title?: string
   nlm_source_links?: { source_id: string; cited_text: string; nlm_url: string }[]
 }
@@ -102,11 +102,6 @@ export default function BKStoryCard({ story, layout = 'grid', highlightQuery = '
             <span className="uppercase tracking-wide">{meta.label}</span>
             <span className="text-[#D0C0B4]">/</span>
             <span className="text-[#A1958C] font-normal font-mono">{displayId}</span>
-            {story.quote_clip_potential && story.quote_clip_potential !== 'Low' && (
-              <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold ${story.quote_clip_potential === 'High' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                {story.quote_clip_potential} clip
-              </span>
-            )}
           </div>
           {story.story_title && (
             <p className="font-sans text-[#2C2117] text-[14.5px] leading-relaxed font-light tracking-wide mb-1">
@@ -154,36 +149,22 @@ export default function BKStoryCard({ story, layout = 'grid', highlightQuery = '
       <div className="absolute top-0 right-0 w-32 h-32 blur-[40px] opacity-[0.04] group-hover:opacity-[0.08] transition-opacity duration-300 rounded-full pointer-events-none" style={{ backgroundColor: meta.accent }} />
 
       <div>
-        {/* Status bar */}
+        {/* Status bar — category + time stage pill + clip badge + ref id */}
         <div className="flex items-center justify-between gap-2 mb-4 pb-2 border-b border-[#F2ECE6]">
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="w-2 h-2 rounded-full inline-block shrink-0" style={{ backgroundColor: meta.accent }} />
             <span className="text-[11px] font-sans font-bold text-[#564940] uppercase tracking-widest">{meta.label}</span>
-            {story.story_type && (
-              <span className="text-[10px] font-mono text-[#A1958C] bg-[#F5EFEB] px-1.5 py-0.5 rounded border border-[#E6DAD1]">{story.story_type}</span>
-            )}
-            {story.quote_clip_potential && story.quote_clip_potential !== 'Low' && (
-              <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold ${story.quote_clip_potential === 'High' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                {story.quote_clip_potential} clip
+            {story.time_life_stage && story.time_life_stage !== 'not specified' && (
+              <span className="text-[11px] font-sans font-bold px-2 py-0.5 rounded border ml-1"
+                style={{ backgroundColor: meta.accent + '12', color: meta.accent, borderColor: meta.accent + '30' }}>
+                {story.time_life_stage}
               </span>
             )}
           </div>
           <span className="text-[10px] font-sans font-medium text-[#A1958C] tracking-wide shrink-0">{displayId}</span>
         </div>
 
-        {/* Time / location */}
-        {(story.time_life_stage && story.time_life_stage !== 'not specified') && (
-          <div className="mb-3">
-            <span className="bg-[#F5EFEB] text-[#564940] px-2.5 py-0.5 rounded border border-[#E6DAD1] text-[11px] font-sans font-bold">
-              {story.time_life_stage}
-              {story.location && story.location !== 'not specified' && (
-                <span className="ml-1.5 text-[10px] font-normal text-[#A1958C]">· {story.location}</span>
-              )}
-            </span>
-          </div>
-        )}
-
-        {/* Story title */}
+        {/* Story title — primary description */}
         {story.story_title && (
           <div className="mb-4">
             <p className="font-sans text-[#2C2117] text-[14.5px] leading-relaxed antialiased font-light tracking-wide">
@@ -192,15 +173,16 @@ export default function BKStoryCard({ story, layout = 'grid', highlightQuery = '
           </div>
         )}
 
-        {/* Body */}
+        {/* Body — source quote with accent border */}
         {body && (
-          <div className="mb-4 pl-3 border-l-2 border-[#D4C3B5]">
+          <div className="mb-4 pl-3 border-l-2" style={{ borderColor: meta.accent + '60' }}>
             <p className={`font-sans font-light text-[#645A51] text-[13px] leading-relaxed italic ${!isBodyExpanded ? 'line-clamp-2' : ''}`}>
               "<HighlightText text={body} highlight={highlightQuery} />"
             </p>
             {body.length > 90 && (
               <button onClick={e => { e.stopPropagation(); setIsBodyExpanded(v => !v) }}
-                className="mt-1 text-[11px] font-semibold text-[#2b6cb0] hover:text-[#1a4976] transition-colors hover:underline">
+                className="mt-1 text-[11px] font-semibold transition-colors hover:underline"
+                style={{ color: meta.accent }}>
                 {isBodyExpanded ? 'Collapse' : 'Show Full Story'}
               </button>
             )}
@@ -224,27 +206,50 @@ export default function BKStoryCard({ story, layout = 'grid', highlightQuery = '
         )}
       </div>
 
-      {/* Actions */}
-      <div className="flex items-center justify-between gap-2 pt-2.5 border-t border-[#F2ECE6] text-[11px] font-sans font-bold">
-        <button onClick={handleCopy} className="text-[#645A51] hover:text-[#2C2117] transition-colors flex items-center gap-1 cursor-pointer select-none">
-          {isCopied
-            ? <><Check className="w-3 h-3 stroke-[2.5]" /> copied ✓</>
-            : <><Copy className="w-3 h-3" /> copy story</>
-          }
-        </button>
-        <div className="flex items-center gap-3 ml-auto">
-          {story.source_notebook_title && (
-            <span className="text-[10px] font-mono text-[#A1958C] truncate max-w-[120px]" title={story.source_notebook_title}>
-              📓 {story.source_notebook_title}
+      <div>
+        {/* Free-form tags */}
+        {story.tags && story.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1 mb-3">
+            {story.tags.map((tag, i) => (
+              <span key={i} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-stone-100 text-stone-500 border border-stone-200/60">
+                {tag}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Location chip */}
+        {story.location && story.location !== 'not specified' && (
+          <div className="flex flex-wrap gap-1.5 mb-4 select-none">
+            <span className="inline-flex items-center text-[10px] font-mono font-medium px-2 py-0.5 rounded border"
+              style={{ backgroundColor: meta.accent + '10', color: meta.accent, borderColor: meta.accent + '25' }}>
+              📍<HighlightText text={story.location} highlight={highlightQuery} />
             </span>
-          )}
-          {story.nlm_source_links?.[0]
-            ? <a href={story.nlm_source_links[0].nlm_url} target="_blank" rel="noopener noreferrer"
-                className="text-[#794E2C] hover:text-[#533013] transition-colors hover:underline">
-                source ↗
-              </a>
-            : <span className="text-[10px] text-[#A6978C] font-mono font-medium">local.db</span>
-          }
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="flex items-center justify-between gap-2 pt-2.5 border-t border-[#F2ECE6] text-[11px] font-sans font-bold">
+          <button onClick={handleCopy} className="text-[#645A51] hover:text-[#2C2117] transition-colors flex items-center gap-1 cursor-pointer select-none">
+            {isCopied
+              ? <><Check className="w-3 h-3 stroke-[2.5]" /> copied ✓</>
+              : <><Copy className="w-3 h-3" /> copy story</>
+            }
+          </button>
+          <div className="flex items-center gap-3 ml-auto">
+            {story.source_notebook_title && (
+              <span className="text-[10px] font-mono text-[#A1958C] truncate max-w-[120px]" title={story.source_notebook_title}>
+                📓 {story.source_notebook_title}
+              </span>
+            )}
+            {story.nlm_source_links?.[0]
+              ? <a href={story.nlm_source_links[0].nlm_url} target="_blank" rel="noopener noreferrer"
+                  className="text-[#794E2C] hover:text-[#533013] transition-colors hover:underline">
+                  source ↗
+                </a>
+              : <span className="text-[10px] text-[#A6978C] font-mono font-medium">local.db</span>
+            }
+          </div>
         </div>
       </div>
     </div>
