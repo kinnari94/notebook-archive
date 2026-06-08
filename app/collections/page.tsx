@@ -107,8 +107,11 @@ export default function CollectionsPage() {
     if (selectedStatus)   params.set('status', selectedStatus)
     try {
       const d = await fetch(`/api/collections?${params}`).then(r => r.json())
-      setItems(d.items || [])
+      const fresh: CollectionItem[] = d.items || []
+      setItems(fresh)
       setTotal(d.total || 0)
+      // Keep the drawer in sync with the freshly loaded data
+      setSelectedItem(prev => prev ? (fresh.find(i => i._id === prev._id) ?? prev) : null)
     } finally {
       setLoading(false)
     }
@@ -121,20 +124,32 @@ export default function CollectionsPage() {
     const payload = { ...formData, photoUrl: formData.photoUrl?.trim() || '' }
     try {
       if (editingId) {
-        await fetch(`/api/collections?id=${editingId}`, {
+        const res = await fetch(`/api/collections?id=${editingId}`, {
           method: 'PATCH', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         })
+        if (!res.ok) {
+          const text = await res.text()
+          throw new Error(`Save failed: ${res.status} — ${text}`)
+        }
+        // Update selectedItem immediately so the drawer reflects the new data
+        if (selectedItem?._id === editingId) {
+          setSelectedItem({ ...selectedItem, ...payload })
+        }
       } else {
-        await fetch('/api/collections', {
+        const res = await fetch('/api/collections', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         })
+        if (!res.ok) throw new Error('Save failed')
       }
       setFormOpen(false)
       setEditingId(null)
       setFormData(EMPTY)
       load()
+    } catch (err) {
+      alert('Failed to save. Check your connection and try again.')
+      console.error(err)
     } finally {
       setSaving(false)
     }
@@ -151,19 +166,21 @@ export default function CollectionsPage() {
   function openEdit(item: CollectionItem, e: React.MouseEvent) {
     e.stopPropagation()
     setEditingId(item._id!)
-    setFormData({ ...item })
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { _id, ...rest } = item
+    setFormData({ ...EMPTY, ...rest })
     setFormOpen(true)
   }
 
   function field(key: keyof Omit<CollectionItem, '_id'>, label: string, type = 'text', opts?: string[]) {
     return (
       <div>
-        <label className="block text-xs font-medium text-[#1B3A2E] mb-1">{label}</label>
+        <label className="block text-[10px] font-mono font-bold text-stone-400 uppercase tracking-wider mb-1.5">{label}</label>
         {opts ? (
           <select
             value={String(formData[key] ?? '')}
             onChange={e => setFormData(p => ({ ...p, [key]: e.target.value }))}
-            className="w-full px-3 py-2 rounded-lg border border-[#E8E3DB] bg-[#F7F3ED] text-sm focus:outline-none focus:ring-2 focus:ring-[#E8673A]/30 text-[#1B3A2E]"
+            className="w-full px-3 py-2 rounded-lg border border-stone-200 bg-stone-50 text-sm focus:outline-none focus:ring-1 focus:ring-stone-400 text-stone-800"
           >
             {opts.map(o => <option key={o} value={o}>{o}</option>)}
           </select>
@@ -172,7 +189,7 @@ export default function CollectionsPage() {
             type={type}
             value={String(formData[key] ?? '')}
             onChange={e => setFormData(p => ({ ...p, [key]: type === 'number' ? Number(e.target.value) : e.target.value }))}
-            className="w-full px-3 py-2 rounded-lg border border-[#E8E3DB] bg-[#F7F3ED] text-sm focus:outline-none focus:ring-2 focus:ring-[#E8673A]/30 text-[#1B3A2E]"
+            className="w-full px-3 py-2 rounded-lg border border-stone-200 bg-stone-50 text-sm focus:outline-none focus:ring-1 focus:ring-stone-400 text-stone-800"
           />
         )}
       </div>
@@ -189,20 +206,15 @@ export default function CollectionsPage() {
     <div className="min-h-screen bg-[#F7F3ED] text-[#1B3A2E] pb-16 font-sans">
 
       {/* Sticky header */}
-      <header className="bg-white border-b border-[#E8E3DB] py-4 px-6 sticky top-0 z-30">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <header className="bg-white py-4 px-6 sticky top-0 z-30">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-4 border-b border-[#E8E3DB]">
           <div className="flex items-center gap-3">
             <div className="bg-[#1B3A2E] text-white p-2 rounded-lg">
               <Package className="w-4 h-4" />
             </div>
-            <div>
-              <span className="text-[9px] font-mono bg-[#F7F3ED] text-[#1B3A2E]/60 px-2 py-0.5 rounded-full font-medium uppercase tracking-wider border border-[#E8E3DB]">
-                Physical Collections
-              </span>
-              <h1 className="font-serif text-xl font-bold text-[#1B3A2E] mt-0.5 tracking-tight">
-                Collections Vault
-              </h1>
-            </div>
+            <h1 className="font-serif text-3xl font-bold text-[#1C3D27] tracking-tight leading-none">
+              Collections Vault
+            </h1>
           </div>
 
           <button
@@ -389,6 +401,19 @@ export default function CollectionsPage() {
                       : 'border-[#E8E3DB]/70 hover:border-[#1B3A2E]/30 hover:shadow-sm'
                   }`}
                 >
+                  {/* Photo thumbnail */}
+                  {item.photoUrl?.trim() && (
+                    <div className="h-36 w-full overflow-hidden bg-stone-100">
+                      <img
+                        src={item.photoUrl.trim()}
+                        alt={item.title}
+                        className="w-full h-full object-cover"
+                        referrerPolicy="no-referrer"
+                        onError={e => { (e.target as HTMLImageElement).parentElement!.style.display = 'none' }}
+                      />
+                    </div>
+                  )}
+
                   {/* Card body */}
                   <div className="p-4 space-y-2.5 flex-1 flex flex-col justify-between">
                     <div>
@@ -396,45 +421,45 @@ export default function CollectionsPage() {
                       <div className="flex items-center justify-between gap-2 text-[10px] font-mono mb-2">
                         <span className="inline-flex items-center gap-1">
                           <span>{meta.icon}</span>
-                          <span className="text-[#1B3A2E]/50 font-medium uppercase tracking-wider">{meta.label}</span>
+                          <span className="text-stone-500 font-medium uppercase tracking-wider">{meta.label}</span>
                         </span>
                         {item.accessionCode && (
-                          <span className="text-[#1B3A2E]/40 font-mono bg-[#F7F3ED] px-1.5 py-0.5 rounded border border-[#E8E3DB]">
+                          <span className="text-stone-400 font-mono bg-stone-50 px-1.5 py-0.5 rounded border border-stone-200">
                             {item.accessionCode}
                           </span>
                         )}
                       </div>
 
                       {/* Title */}
-                      <h4 className="font-serif font-normal text-[#1B3A2E] text-[13px] sm:text-sm leading-snug line-clamp-2 group-hover:text-[#2D5C45] transition-colors">
+                      <h4 className="font-serif font-normal text-stone-900 text-[13px] sm:text-sm leading-snug line-clamp-2 group-hover:text-stone-700 transition-colors">
                         {item.title}
                       </h4>
 
                       {/* Description */}
                       {item.description && (
-                        <p className="text-[#1B3A2E]/50 text-[11px] line-clamp-2 mt-1.5 leading-relaxed font-light">
+                        <p className="text-stone-500 text-[11px] line-clamp-2 mt-1.5 leading-relaxed font-light">
                           {item.description}
                         </p>
                       )}
                     </div>
 
                     {/* Mode-aware meta row */}
-                    <div className="pt-3 mt-2 border-t border-[#E8E3DB]/60 flex items-center justify-between text-[11px] font-mono text-[#1B3A2E]/50">
+                    <div className="pt-3 mt-2 border-t border-stone-100 flex items-center justify-between text-[11px] font-mono text-stone-500">
                       {mode === 'registrar' && (
                         <>
-                          <span className="text-[#1B3A2E]/40">Vault Room:</span>
-                          <span className="text-[#1B3A2E] font-semibold truncate max-w-[160px]">
+                          <span className="text-stone-400">Vault Room:</span>
+                          <span className="text-stone-800 font-semibold truncate max-w-[160px]">
                             {item.storageWarehouse || item.location || '—'}
                           </span>
                         </>
                       )}
                       {mode === 'dam' && (
                         <>
-                          <span className="text-[#1B3A2E]/40">Digitalization:</span>
+                          <span className="text-stone-400">Digitalization:</span>
                           <span className={`font-semibold ${
                             item.digitalizationStatus === 'Done'        ? 'text-emerald-600' :
                             item.digitalizationStatus === 'In Progress' ? 'text-amber-600'   :
-                            'text-[#1B3A2E]/40 italic font-normal'
+                            'text-stone-400 italic font-normal'
                           }`}>
                             {item.digitalizationStatus || 'Not started'}
                           </span>
@@ -442,10 +467,10 @@ export default function CollectionsPage() {
                       )}
                       {mode === 'conservator' && (
                         <>
-                          <span className="text-[#1B3A2E]/40">Condition:</span>
+                          <span className="text-stone-400">Condition:</span>
                           {condMeta
                             ? <span className={`font-semibold ${condMeta.color}`}>Cat {item.conditionCategory} — {condMeta.label}</span>
-                            : <span className="text-[#1B3A2E]/40 italic font-normal">Not assessed</span>
+                            : <span className="text-stone-400 italic font-normal">Not assessed</span>
                           }
                         </>
                       )}
@@ -453,20 +478,20 @@ export default function CollectionsPage() {
                   </div>
 
                   {/* Footer status stripe */}
-                  <div className="bg-[#F7F3ED]/70 border-t border-[#E8E3DB]/60 py-2 px-4 flex items-center justify-between text-[10px]">
+                  <div className="bg-stone-50/80 border-t border-stone-100 py-2 px-4 flex items-center justify-between text-[10px]">
                     <span className={`px-2 py-0.5 rounded font-mono text-[9px] font-semibold uppercase tracking-wider border ${status.badge}`}>
                       {status.label}
                     </span>
                     <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button
                         onClick={e => openEdit(item, e)}
-                        className="p-1 hover:bg-[#E8E3DB] text-[#1B3A2E]/40 hover:text-[#1B3A2E] rounded transition-colors"
+                        className="p-1 hover:bg-stone-100 text-stone-400 hover:text-stone-800 rounded transition-colors"
                       >
                         <Edit2 className="w-3.5 h-3.5" />
                       </button>
                       <button
                         onClick={e => handleDelete(item._id!, e)}
-                        className="p-1 hover:bg-red-50 text-[#1B3A2E]/40 hover:text-red-500 rounded transition-colors"
+                        className="p-1 hover:bg-red-50 text-stone-400 hover:text-red-500 rounded transition-colors"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -780,43 +805,103 @@ export default function CollectionsPage() {
             className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
             onClick={e => e.stopPropagation()}
           >
-            <div className="sticky top-0 bg-white border-b border-[#E8E3DB] px-6 py-4 flex items-center justify-between z-10">
-              <h2 className="font-serif text-lg font-semibold text-[#1B3A2E]">
-                {editingId ? 'Edit Object' : 'Accession New Object'}
-              </h2>
-              <button onClick={() => setFormOpen(false)} className="p-2 rounded-xl hover:bg-[#F7F3ED] text-[#1B3A2E]/50">
+            <div className="sticky top-0 bg-white border-b border-stone-200 px-6 py-4 flex items-center justify-between z-10">
+              <div>
+                <h2 className="font-serif text-lg font-semibold text-stone-900">
+                  {editingId ? 'Edit Object' : 'Accession New Object'}
+                </h2>
+                <p className="text-[10px] font-mono text-stone-400 uppercase tracking-wider mt-0.5">
+                  {mode === 'registrar' ? '🏛️ Physical Archives' : mode === 'dam' ? '📸 Media Assets' : '🔬 Conservation Lab'}
+                </p>
+              </div>
+              <button onClick={() => setFormOpen(false)} className="p-2 rounded-xl hover:bg-stone-100 text-stone-400">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="px-6 py-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="sm:col-span-2">{field('title', 'Title *')}</div>
-              <div className="sm:col-span-2">{field('description', 'Description')}</div>
-              {field('category', 'Category', 'text', Object.keys(CATEGORY_META))}
-              {field('status', 'Status', 'text', Object.keys(STATUS_META))}
-              {field('accessionCode', 'Accession Code')}
-              {field('qty', 'Quantity', 'number')}
-              {field('dimensions', 'Dimensions (cm)')}
-              {field('conditionCategory', 'Condition Category', 'text', ['A', 'B', 'C', 'D'])}
-              {field('conservationHealth', 'Conservation Health')}
-              {field('location', 'Location')}
-              {field('storageWarehouse', 'Warehouse')}
-              {field('storageCupboard', 'Cupboard / Shelf')}
-              {field('receivedOn', 'Received On')}
-              <div className="sm:col-span-2">{field('givenBy', 'Given By / Donor')}</div>
-              {field('inceptionYear', 'Inception / Historical Year')}
-              {field('clearance', 'Clearance & Security')}
-              {field('appraisalValuation', 'Appraisal Valuation')}
-              <div className="sm:col-span-2">{field('photoUrl', 'Photo URL')}</div>
-              <div className="sm:col-span-2">{field('remarks', 'Remarks / Historical Provenance Record')}</div>
-              {field('digitalizationFolderLink', 'Digitalization Folder Link')}
-              {field('conditionReportLink', 'Condition Report Link')}
+            <div className="px-6 py-5 space-y-5">
+              {/* Always-present core fields */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="sm:col-span-2">{field('title', 'Title *')}</div>
+                <div className="sm:col-span-2">{field('description', 'Description')}</div>
+                {field('category', 'Category', 'text', Object.keys(CATEGORY_META))}
+                {field('status', 'Status', 'text', Object.keys(STATUS_META))}
+                {field('accessionCode', 'Accession Code')}
+                {field('qty', 'Quantity', 'number')}
+                <div className="sm:col-span-2">{field('photoUrl', 'Photo URL')}</div>
+                {formData.photoUrl?.trim() && (
+                  <div className="sm:col-span-2">
+                    <div className="rounded-xl overflow-hidden bg-stone-100 h-48 border border-stone-200">
+                      <img
+                        src={formData.photoUrl.trim()}
+                        alt="Preview"
+                        className="w-full h-full object-cover"
+                        referrerPolicy="no-referrer"
+                        onError={e => { (e.target as HTMLImageElement).parentElement!.innerHTML = '<div class="w-full h-full flex items-center justify-center text-stone-400 text-xs font-mono">Could not load image</div>' }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Registrar fields */}
+              {mode === 'registrar' && (
+                <>
+                  <div className="pt-1 border-t border-stone-100">
+                    <p className="text-[10px] font-mono font-bold text-stone-400 uppercase tracking-wider mb-3">Physical Archives</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {field('storageWarehouse', 'Secure Storage Location')}
+                      {field('storageCupboard', 'Cabinet / Drawer ID')}
+                      {field('location', 'Location')}
+                      {field('inceptionYear', 'Inception Historical Year')}
+                      {field('receivedOn', 'Date Received')}
+                      {field('clearance', 'Clearance & Security')}
+                      {field('appraisalValuation', 'Appraisal Valuation')}
+                      {field('dimensions', 'Dimensions (cm)')}
+                      <div className="sm:col-span-2">{field('givenBy', 'Entrustee / Original Owner')}</div>
+                      <div className="sm:col-span-2">{field('remarks', 'Historical Provenance Record')}</div>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* DAM fields */}
+              {mode === 'dam' && (
+                <div className="pt-1 border-t border-stone-100">
+                  <p className="text-[10px] font-mono font-bold text-stone-400 uppercase tracking-wider mb-3">Media Assets</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {field('digitalizationStatus', 'Digitalization Status', 'text', ['Not Started', 'In Progress', 'Done'])}
+                    {field('digitalizationSewak', 'Digitalization Sewak')}
+                    <div className="sm:col-span-2">{field('digitalizationFolderLink', 'Digital Assets Folder Link')}</div>
+                    <div className="sm:col-span-2">{field('givenBy', 'Given By')}</div>
+                  </div>
+                </div>
+              )}
+
+              {/* Conservator fields */}
+              {mode === 'conservator' && (
+                <div className="pt-1 border-t border-stone-100">
+                  <p className="text-[10px] font-mono font-bold text-stone-400 uppercase tracking-wider mb-3">Conservation Lab</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {field('conditionCategory', 'Condition Category', 'text', ['A', 'B', 'C', 'D'])}
+                    {field('conservationHealth', 'Conservation Health')}
+                    {field('conservationStatus', 'Conservation Status')}
+                    {field('conservationDeadline', 'Conservation Deadline')}
+                    {field('inspectionFrequency', 'Inspection Frequency')}
+                    {field('treatmentCategory', 'Treatment Category')}
+                    {field('treatmentAuthority', 'Treatment Authority')}
+                    {field('omkarGuidance', 'Omkar Guidance')}
+                    <div className="sm:col-span-2">{field('treatmentDetails', 'Treatment Details')}</div>
+                    <div className="sm:col-span-2">{field('conditionReportLink', 'Condition Report Link')}</div>
+                  </div>
+                </div>
+              )}
             </div>
 
-            <div className="sticky bottom-0 bg-white border-t border-[#E8E3DB] px-6 py-4 flex justify-end gap-3">
+            <div className="sticky bottom-0 bg-white border-t border-stone-200 px-6 py-4 flex justify-end gap-3">
               <button
                 onClick={() => setFormOpen(false)}
-                className="px-5 py-2.5 rounded-xl border border-[#E8E3DB] text-sm font-medium text-[#1B3A2E]/60 hover:bg-[#F7F3ED] transition-colors"
+                className="px-5 py-2.5 rounded-xl border border-stone-200 text-sm font-medium text-stone-500 hover:bg-stone-50 transition-colors"
               >
                 Cancel
               </button>
