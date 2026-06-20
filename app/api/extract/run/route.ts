@@ -358,6 +358,7 @@ export async function POST(req: NextRequest) {
           send({ msg: `━━ Notebook: ${nbTitle}${isBK ? ' [Bapa Katha]' : ''}`, level: 'info' })
 
           for (const cat of categories as string[]) {
+            if (done > 0) await new Promise(r => setTimeout(r, 15000))
             send({ msg: `  Querying [${cat}]…`, level: 'info' })
 
             try {
@@ -368,7 +369,19 @@ export async function POST(req: NextRequest) {
                 prompt = (PROMPTS[cat] || `Extract all ${cat} incidents.`) + PROMPT_SUFFIX
               }
 
-              const { answer, references } = await askNotebook(nbId, prompt)
+              let askResult: AskResponse
+              try {
+                askResult = await askNotebook(nbId, prompt)
+              } catch (retryErr: any) {
+                if (/rate limit|rejected/i.test(String(retryErr))) {
+                  send({ msg: `  ⏳ Rate limited — waiting 30s before retry…`, level: 'muted' })
+                  await new Promise(r => setTimeout(r, 30000))
+                  askResult = await askNotebook(nbId, prompt)
+                } else {
+                  throw retryErr
+                }
+              }
+              const { answer, references } = askResult
               const now = new Date()
 
               // Build source links from references: { source_id → nlm_url }

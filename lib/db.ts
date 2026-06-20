@@ -10,9 +10,17 @@ export async function getDb(): Promise<Db> {
   const db = client.db(DB_NAME)
   if (!indexesEnsured) {
     indexesEnsured = true
-    // Unique index prevents duplicate incidents even under concurrent runs
     db.collection('incidents').createIndex({ contentHash: 1 }, { unique: true, sparse: true }).catch(() => {})
     db.collection('bk_stories').createIndex({ contentHash: 1 }, { unique: true, sparse: true }).catch(() => {})
+    // Query indexes
+    db.collection('incidents').createIndex({ category: 1 }).catch(() => {})
+    db.collection('incidents').createIndex({ people: 1 }).catch(() => {})
+    db.collection('incidents').createIndex({ locations: 1 }).catch(() => {})
+    db.collection('incidents').createIndex({ 'date.year': 1 }).catch(() => {})
+    db.collection('bk_stories').createIndex({ category: 1 }).catch(() => {})
+    db.collection('bk_stories').createIndex({ person: 1 }).catch(() => {})
+    db.collection('bk_stories').createIndex({ location: 1 }).catch(() => {})
+    db.collection('bk_stories').createIndex({ extracted_at: -1 }).catch(() => {})
   }
   return db
 }

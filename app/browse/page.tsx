@@ -64,12 +64,20 @@ export default function Browse() {
 
   const activeCategoryMeta = source === 'bapa_katha' ? BK_CATEGORIES : STANDARD_CATEGORIES
 
-  // Fetch a large batch whenever source changes
-  const fetchAll = useCallback(async (src: Source) => {
+  const fetchAll = useCallback(async (src: Source, filters: {
+    category?: string, person?: string, location?: string,
+    yearFrom?: string, yearTo?: string, q?: string
+  } = {}) => {
     setLoading(true)
     setAllIncidents([])
     try {
-      const params = new URLSearchParams({ limit: '500', skip: '0', source: src })
+      const params = new URLSearchParams({ limit: '200', skip: '0', source: src })
+      if (filters.category) params.set('category', filters.category)
+      if (filters.person)   params.set('person', filters.person)
+      if (filters.location) params.set('location', filters.location)
+      if (filters.yearFrom) params.set('year_from', filters.yearFrom)
+      if (filters.yearTo)   params.set('year_to', filters.yearTo)
+      if (filters.q)        params.set('q', filters.q)
       const d = await fetch(`/api/incidents?${params}`).then(r => r.json())
       setAllIncidents(d.incidents || [])
     } finally {
@@ -77,7 +85,19 @@ export default function Browse() {
     }
   }, [])
 
-  useEffect(() => { fetchAll(source) }, [source, fetchAll])
+  useEffect(() => {
+    const t = setTimeout(() => {
+      fetchAll(source, {
+        category: selectedCategory,
+        person: searchPerson,
+        location: searchLocation,
+        yearFrom,
+        yearTo,
+        q: searchKeyword,
+      })
+    }, searchKeyword ? 400 : 0)
+    return () => clearTimeout(t)
+  }, [source, selectedCategory, searchPerson, searchLocation, yearFrom, yearTo, searchKeyword, fetchAll])
 
   useEffect(() => {
     fetch('/api/people').then(r => r.json()).then(d => setPeople(d.people || [])).catch(() => {})
@@ -111,33 +131,7 @@ export default function Browse() {
   // Client-side filter + sort
   const filteredIncidents = useMemo(() => {
     let result = [...allIncidents]
-    if (selectedCategory) result = result.filter(i => i.category === selectedCategory)
-    if (searchKeyword) {
-      const q = searchKeyword.toLowerCase()
-      result = result.filter(i =>
-        i.description?.toLowerCase().includes(q) ||
-        i.source_chunk?.toLowerCase().includes(q) ||
-        i.story_title?.toLowerCase().includes(q) ||
-        i.what_happened?.toLowerCase().includes(q) ||
-        i.category?.toLowerCase().replace(/_/g, ' ').includes(q)
-      )
-    }
-    if (searchPerson) {
-      const q = searchPerson.toLowerCase()
-      result = result.filter(i =>
-        i.people?.some((p: string) => p.toLowerCase().includes(q)) ||
-        i.person?.toLowerCase().includes(q)
-      )
-    }
-    if (searchLocation) {
-      const q = searchLocation.toLowerCase()
-      result = result.filter(i =>
-        i.locations?.some((l: string) => l.toLowerCase().includes(q)) ||
-        i.location?.toLowerCase().includes(q)
-      )
-    }
-    if (yearFrom) result = result.filter(i => i.date?.year && i.date.year >= parseInt(yearFrom))
-    if (yearTo)   result = result.filter(i => i.date?.year && i.date.year <= parseInt(yearTo))
+    // Tags are client-side only (not in API)
     if (selectedTags.length > 0)
       result = result.filter(i => selectedTags.every(t => i.tags?.includes(t)))
     result.sort((a, b) => {
@@ -145,7 +139,7 @@ export default function Browse() {
       return sortSequence === 'asc' ? ya - yb : yb - ya
     })
     return result
-  }, [allIncidents, selectedCategory, searchKeyword, searchPerson, searchLocation, yearFrom, yearTo, sortSequence, selectedTags])
+  }, [allIncidents, sortSequence, selectedTags])
 
   const visibleIncidents = useMemo(() => filteredIncidents.slice(0, visibleCount), [filteredIncidents, visibleCount])
 
