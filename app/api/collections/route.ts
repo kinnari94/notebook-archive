@@ -6,13 +6,21 @@ const COL = 'physical_collections'
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
+  const db = await getDb()
+
+  // Distinct values endpoint
+  const distinct = searchParams.get('distinct')
+  if (distinct === 'material') {
+    const vals = await db.collection(COL).distinct('material', {})
+    return NextResponse.json((vals as string[]).filter(Boolean).sort())
+  }
+
   const q        = searchParams.get('q') || ''
-  const category = searchParams.get('category') || ''
   const status   = searchParams.get('status') || ''
+  const material = searchParams.get('material') || ''
   const limit    = parseInt(searchParams.get('limit') || '100')
   const skip     = parseInt(searchParams.get('skip') || '0')
 
-  const db = await getDb()
   const filter: Record<string, unknown> = {}
 
   if (q) {
@@ -22,8 +30,8 @@ export async function GET(req: NextRequest) {
       { givenBy: re }, { location: re }, { id: re },
     ]
   }
-  if (category) filter.category = category
   if (status)   filter.status   = status
+  if (material) filter.material = material
 
   const items = await db.collection(COL).find(filter).skip(skip).limit(limit).toArray()
   const total = await db.collection(COL).countDocuments(filter)
