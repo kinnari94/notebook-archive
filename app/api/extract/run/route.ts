@@ -247,6 +247,8 @@ CATEGORY: <category key — e.g. bk_first_meeting>
 STORY_TYPE: <transformation | agna | satsang | bhakti | seva | youth | dasha | humour | crisis | family | mystical | vision | compassion | letter | object | correction>
 TIME_LIFE_STAGE: <year, decade, or life stage — "not specified" if unknown>
 LOCATION: <place — "not specified" if unknown>
+PERSON: <name of the devotee sharing this story — "not specified" if unknown>
+TAGS: <comma-separated tags from the canonical list, or free-form — NONE if none apply>
 SUMMARY: <2-line editorial summary>
 WHAT_HAPPENED: <concrete incident with specific details — avoid generic praise>
 WHAT_GURUDEV_SAID: <exact words if available — "exact wording not available" if not>
@@ -264,6 +266,8 @@ interface ParsedBKStory {
   story_type: string
   time_life_stage: string
   location: string
+  person: string
+  tags: string[]
   summary: string
   what_happened: string
   what_gurudev_said: string
@@ -285,6 +289,8 @@ function parseBKResponse(text: string, category: string): ParsedBKStory[] {
       story_type:        fieldValue(block, 'STORY_TYPE'),
       time_life_stage:   fieldValue(block, 'TIME_LIFE_STAGE') || 'not specified',
       location:          fieldValue(block, 'LOCATION') || 'not specified',
+      person:            fieldValue(block, 'PERSON') || 'not specified',
+      tags:              parseList(fieldValue(block, 'TAGS')),
       summary:           fieldValue(block, 'SUMMARY'),
       what_happened:     fieldValue(block, 'WHAT_HAPPENED'),
       what_gurudev_said: fieldValue(block, 'WHAT_GURUDEV_SAID') || 'exact wording not available',

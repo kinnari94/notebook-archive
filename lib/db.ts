@@ -210,14 +210,16 @@ export async function getAllPeople(limit = 200) {
     ])
     const flat: string[] = []
     for (const item of [...incPeople, ...bkPeople]) {
-      if (Array.isArray(item)) flat.push(...item)
+      if (Array.isArray(item)) flat.push(...item.filter((s: unknown) => typeof s === 'string' && s.trim() && s.trim() !== 'not specified'))
       else if (typeof item === 'string' && item.trim() && item.trim() !== 'not specified') flat.push(item.trim())
     }
     return [...new Set(flat)].sort().slice(0, limit)
-  } catch {
+  } catch (e) {
+    console.error('getAllPeople error:', e)
     return []
   }
 }
+
 
 export async function getAllLocations(limit = 200) {
   const db = await getDb()
@@ -228,11 +230,12 @@ export async function getAllLocations(limit = 200) {
     ])
     const flat: string[] = []
     for (const item of [...incLocations, ...bkLocations]) {
-      if (Array.isArray(item)) flat.push(...item)
+      if (Array.isArray(item)) flat.push(...item.filter((s: unknown) => typeof s === 'string' && s.trim() && s.trim() !== 'not specified'))
       else if (typeof item === 'string' && item.trim() && item.trim() !== 'not specified') flat.push(item.trim())
     }
     return [...new Set(flat)].sort().slice(0, limit)
-  } catch {
+  } catch (e) {
+    console.error('getAllLocations error:', e)
     return []
   }
 }

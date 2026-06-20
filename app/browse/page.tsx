@@ -80,9 +80,9 @@ export default function Browse() {
   useEffect(() => { fetchAll(source) }, [source, fetchAll])
 
   useEffect(() => {
-    fetch('/api/people').then(r => r.json()).then(d => setPeople(d.people || []))
-    fetch('/api/locations').then(r => r.json()).then(d => setLocations(d.locations || []))
-  }, [])
+    fetch('/api/people').then(r => r.json()).then(d => setPeople(d.people || [])).catch(() => {})
+    fetch('/api/locations').then(r => r.json()).then(d => setLocations(d.locations || [])).catch(() => {})
+  }, [source])
 
   const CANONICAL_TAGS = [
     'train', 'bus', 'cycle', 'walking', 'running', 'boating', 'beach', 'snow',
