@@ -1037,7 +1037,7 @@ export default function CollectionsPage() {
               alt="Preview"
               referrerPolicy="no-referrer"
               className="max-w-full max-h-full rounded-xl object-contain shadow-2xl"
-              onClick={e => e.stopPropagation()}
+              onClick={(e: React.MouseEvent) => e.stopPropagation()}
             />
             <button
               onClick={() => setPreviewImg(null)}
