@@ -1,8 +1,55 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { CheckCircle, XCircle, Loader2, Database, RefreshCw, BarChart3, BookOpen, Terminal } from 'lucide-react'
+import { CheckCircle, XCircle, Loader2, Database, RefreshCw, BarChart3, BookOpen, Terminal, Users, Trash2, Plus } from 'lucide-react'
 
 export default function Settings() {
+  const [allowedUsers, setAllowedUsers] = useState<{ email: string; addedAt: string }[]>([])
+  const [newEmail, setNewEmail] = useState('')
+  const [usersLoading, setUsersLoading] = useState(true)
+  const [addingUser, setAddingUser] = useState(false)
+  const [removingEmail, setRemovingEmail] = useState<string | null>(null)
+  const [userMsg, setUserMsg] = useState<{ ok: boolean; text: string } | null>(null)
+
+  async function loadUsers() {
+    setUsersLoading(true)
+    try {
+      const r = await fetch('/api/allowed-users')
+      const d = await r.json()
+      setAllowedUsers(d.users)
+    } finally {
+      setUsersLoading(false)
+    }
+  }
+
+  async function addUser() {
+    if (!newEmail.includes('@')) return
+    setAddingUser(true); setUserMsg(null)
+    try {
+      const r = await fetch('/api/allowed-users', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: newEmail }),
+      })
+      if (r.ok) { setNewEmail(''); await loadUsers(); setUserMsg({ ok: true, text: 'User added' }) }
+    } finally {
+      setAddingUser(false)
+    }
+  }
+
+  async function removeUser(email: string) {
+    setRemovingEmail(email)
+    try {
+      await fetch('/api/allowed-users', {
+        method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      })
+      await loadUsers()
+    } finally {
+      setRemovingEmail(null)
+    }
+  }
+
+  useEffect(() => { loadUsers() }, [])
+
   const [uri, setUri] = useState('')
   const [dbName, setDbName] = useState('bapaji_archive')
   const [testing, setTesting] = useState(false)
@@ -235,6 +282,73 @@ export default function Settings() {
           {nlmChecking ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
           Re-check auth
         </button>
+      </div>
+
+      {/* User Access */}
+      <div className="bg-white border border-border rounded-2xl p-6 mb-6">
+        <div className="flex items-center gap-3 mb-5">
+          <div className="w-9 h-9 bg-purple-50 rounded-xl flex items-center justify-center">
+            <Users className="w-5 h-5 text-purple-600" />
+          </div>
+          <div>
+            <h2 className="font-semibold text-ink">Allowed Users</h2>
+            <p className="text-xs text-muted">Only these Google accounts can sign in. Empty list = open access.</p>
+          </div>
+        </div>
+
+        <div className="flex gap-2 mb-4">
+          <input
+            type="email"
+            value={newEmail}
+            onChange={e => setNewEmail(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && addUser()}
+            placeholder="someone@gmail.com"
+            className="flex-1 px-4 py-2.5 rounded-xl border border-border bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-ember/30"
+          />
+          <button
+            onClick={addUser}
+            disabled={addingUser || !newEmail.includes('@')}
+            className="flex items-center gap-1.5 px-4 py-2.5 bg-forest text-white rounded-xl text-sm font-semibold hover:bg-forest-light disabled:opacity-50 transition-colors"
+          >
+            {addingUser ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+            Add
+          </button>
+        </div>
+
+        {userMsg && (
+          <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium mb-3 ${
+            userMsg.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'
+          }`}>
+            {userMsg.ok ? <CheckCircle className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
+            {userMsg.text}
+          </div>
+        )}
+
+        {usersLoading ? (
+          <div className="flex items-center gap-2 text-sm text-muted py-2">
+            <Loader2 className="w-4 h-4 animate-spin" /> Loading…
+          </div>
+        ) : allowedUsers.length === 0 ? (
+          <p className="text-sm text-muted py-2 italic">No users added — all Google accounts can sign in.</p>
+        ) : (
+          <div className="border border-border rounded-xl overflow-hidden">
+            {allowedUsers.map(u => (
+              <div key={u.email} className="flex items-center justify-between px-4 py-2.5 border-b border-border last:border-0">
+                <div>
+                  <p className="text-sm font-medium text-ink">{u.email}</p>
+                  <p className="text-xs text-muted">Added {new Date(u.addedAt).toLocaleDateString()}</p>
+                </div>
+                <button
+                  onClick={() => removeUser(u.email)}
+                  disabled={removingEmail === u.email}
+                  className="p-1.5 text-muted hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {removingEmail === u.email ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* About */}
