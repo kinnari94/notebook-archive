@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { Check, Copy } from 'lucide-react'
+import { Check, Copy, MapPin, User } from 'lucide-react'
 
 const BK_CATEGORY_COLORS: Record<string, { label: string; icon: string; accent: string }> = {
   bk_line_that_changed_me:  { label: 'The Line That Changed Me',         icon: '💬', accent: '#92400E' },
@@ -57,6 +57,8 @@ interface BKStory {
   story_type?: string
   time_life_stage?: string
   location?: string
+  person?: string
+  people?: string[]
   category?: string
   tags?: string[]
   source_notebook_title?: string
@@ -122,11 +124,20 @@ export default function BKStoryCard({ story, layout = 'grid', highlightQuery = '
               </p>
             </div>
           )}
-          {story.location && story.location !== 'not specified' && (
-            <div className="mt-1.5 flex items-center gap-1 text-[10px] font-mono text-stone-500">
-              📍{story.location}
+          {(story.location && story.location !== 'not specified') || story.person || (story.people && story.people.length > 0) ? (
+            <div className="mt-1.5 flex flex-wrap items-center gap-2">
+              {story.location && story.location !== 'not specified' && (
+                <span className="inline-flex items-center gap-1 text-[10px] font-mono text-stone-500">
+                  <MapPin className="w-2.5 h-2.5" />{story.location}
+                </span>
+              )}
+              {(story.people ?? (story.person ? [story.person] : [])).filter(p => p && p !== 'not specified').map((p, i) => (
+                <span key={i} className="inline-flex items-center gap-1 text-[10px] font-mono text-sky-600">
+                  <User className="w-2.5 h-2.5" />{p}
+                </span>
+              ))}
             </div>
-          )}
+          ) : null}
         </div>
 
         <div className="flex items-center gap-3 text-[11px] font-sans font-medium shrink-0 select-none">
@@ -225,13 +236,20 @@ export default function BKStoryCard({ story, layout = 'grid', highlightQuery = '
           </div>
         )}
 
-        {/* Location chip */}
-        {story.location && story.location !== 'not specified' && (
+        {/* Location + Person chips */}
+        {((story.location && story.location !== 'not specified') || story.person || (story.people && story.people.length > 0)) && (
           <div className="flex flex-wrap gap-1.5 mb-4 select-none">
-            <span className="inline-flex items-center text-[10px] font-mono font-medium px-2 py-0.5 rounded border"
-              style={{ backgroundColor: meta.accent + '10', color: meta.accent, borderColor: meta.accent + '25' }}>
-              📍<HighlightText text={story.location} highlight={highlightQuery} />
-            </span>
+            {story.location && story.location !== 'not specified' && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-mono font-medium px-2 py-0.5 rounded border"
+                style={{ backgroundColor: meta.accent + '10', color: meta.accent, borderColor: meta.accent + '25' }}>
+                <MapPin className="w-2.5 h-2.5" /><HighlightText text={story.location} highlight={highlightQuery} />
+              </span>
+            )}
+            {(story.people ?? (story.person ? [story.person] : [])).filter(p => p && p !== 'not specified').map((p, i) => (
+              <span key={i} className="inline-flex items-center gap-1 text-[10px] font-mono font-medium px-2 py-0.5 rounded border bg-sky-50 text-sky-700 border-sky-100">
+                <User className="w-2.5 h-2.5" /><HighlightText text={p} highlight={highlightQuery} />
+              </span>
+            ))}
           </div>
         )}
 

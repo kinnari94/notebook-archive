@@ -124,11 +124,17 @@ export default function Browse() {
     }
     if (searchPerson) {
       const q = searchPerson.toLowerCase()
-      result = result.filter(i => i.people?.some((p: string) => p.toLowerCase().includes(q)))
+      result = result.filter(i =>
+        i.people?.some((p: string) => p.toLowerCase().includes(q)) ||
+        i.person?.toLowerCase().includes(q)
+      )
     }
     if (searchLocation) {
       const q = searchLocation.toLowerCase()
-      result = result.filter(i => i.locations?.some((l: string) => l.toLowerCase().includes(q)))
+      result = result.filter(i =>
+        i.locations?.some((l: string) => l.toLowerCase().includes(q)) ||
+        i.location?.toLowerCase().includes(q)
+      )
     }
     if (yearFrom) result = result.filter(i => i.date?.year && i.date.year >= parseInt(yearFrom))
     if (yearTo)   result = result.filter(i => i.date?.year && i.date.year <= parseInt(yearTo))

@@ -51,6 +51,8 @@ const FIXED_CATEGORIES = [
 ]
 
 const PROMPT_SUFFIX = `
+IMPORTANT: Return a maximum of 30 incidents per response. If there are more, return only the 30 most significant ones.
+
 Return ONLY structured blocks in this exact format:
 
 INCIDENT [1]
@@ -233,6 +235,8 @@ train | bus | cycle | walking | running | boating | beach | snow | dining_table 
 Use them exactly as written above (snake_case). Add other free-form tags as needed for content not covered above.`
 
 const BK_GENERAL_SUFFIX = `${BK_CANONICAL_TAGS}
+
+IMPORTANT: Return a maximum of 15 stories per response. If there are more, return only the 15 most significant ones. Keep WHAT_HAPPENED under 300 words per story.
 
 Return ONLY structured blocks in this exact format:
 

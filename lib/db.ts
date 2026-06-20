@@ -204,11 +204,14 @@ export async function getIncidentById(id: string) {
 export async function getAllPeople(limit = 200) {
   const db = await getDb()
   try {
-    const result = await db.collection(COLLECTIONS.incidents).distinct('people')
+    const [incPeople, bkPeople] = await Promise.all([
+      db.collection(COLLECTIONS.incidents).distinct('people'),
+      db.collection(COLLECTIONS.bk_stories).distinct('person'),
+    ])
     const flat: string[] = []
-    for (const item of result) {
+    for (const item of [...incPeople, ...bkPeople]) {
       if (Array.isArray(item)) flat.push(...item)
-      else if (typeof item === 'string' && item.trim()) flat.push(item.trim())
+      else if (typeof item === 'string' && item.trim() && item.trim() !== 'not specified') flat.push(item.trim())
     }
     return [...new Set(flat)].sort().slice(0, limit)
   } catch {
@@ -219,11 +222,14 @@ export async function getAllPeople(limit = 200) {
 export async function getAllLocations(limit = 200) {
   const db = await getDb()
   try {
-    const result = await db.collection(COLLECTIONS.incidents).distinct('locations')
+    const [incLocations, bkLocations] = await Promise.all([
+      db.collection(COLLECTIONS.incidents).distinct('locations'),
+      db.collection(COLLECTIONS.bk_stories).distinct('location'),
+    ])
     const flat: string[] = []
-    for (const item of result) {
+    for (const item of [...incLocations, ...bkLocations]) {
       if (Array.isArray(item)) flat.push(...item)
-      else if (typeof item === 'string' && item.trim()) flat.push(item.trim())
+      else if (typeof item === 'string' && item.trim() && item.trim() !== 'not specified') flat.push(item.trim())
     }
     return [...new Set(flat)].sort().slice(0, limit)
   } catch {
