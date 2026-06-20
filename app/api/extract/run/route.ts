@@ -195,9 +195,44 @@ Find every instance that reveals the depth of Gurudevshri's personal devotion to
   bk_letters_mails: `${BK_BASE}
 
 Find every instance involving a letter or written communication — a letter written by Gurudevshri to a devotee, a letter a devotee received in a moment of crisis, a patrank being read aloud, or the practice of mail replies before sleep. For each instance, note: who the letter was to or from, the occasion or need that prompted it, any specific words quoted or remembered, and what the letter meant to the person who received it.`,
+
+  bk_night_satsang: `${BK_BASE}
+
+Find every instance of Gurudevshri conducting satsang, giving guidance, or attending to devotees at night — late evenings, after midnight, or early pre-dawn hours. For each instance, note: the approximate time, the setting, who was present, what was discussed or transmitted, and why night was chosen or simply when it happened. Also capture any stories of seekers who approached Him at unusual hours and received personal attention.`,
+
+  bk_question_answer: `${BK_BASE}
+
+Find every instance where a devotee posed a direct question to Gurudevshri — about life decisions, spiritual doubt, philosophical puzzles, personal struggles, or practical matters — and He gave a specific answer. For each instance, note: the exact question as asked, the context in which it was posed (private, public satsang, walk, dining), the exact or paraphrased answer He gave, and whether the answer resolved the devotee's doubt or opened a new direction of inquiry.`,
+
+  bk_closing_accounts: `${BK_BASE}
+
+Find every instance where Gurudevshri settled, resolved, or closed a karmic or personal account with someone — a past acquaintance, a family member, an adversary, or a devotee. This includes moments where He visited, forgave, reconciled with, or completed an unfinished connection with a person from His or another's past. Note: who the person was, the nature of the prior relationship or debt, what Gurudevshri said or did, and how the account was considered closed.`,
+
+  bk_same_incident_diff_ajna: `${BK_BASE}
+
+Find every instance where two or more devotees describe the same event, the same gathering, or the same interaction with Gurudevshri — but received different instructions, had different experiences, or noticed different things. For each such case, note: the shared event or moment, each person's account of what they observed or were told, and what the difference in ajna or experience reveals about how He works individually within a collective.`,
+
+  bk_gurudev_as_child: `${BK_BASE}
+
+Find every account of Gurudevshri's childhood and early youth — told by family members, childhood neighbors, schoolmates, or elders who knew Him before He was publicly recognized. For each account, note: the approximate age of Gurudevshri, what was observed (unusual stillness, early signs of detachment, early spiritual questioning, acts of compassion or unusual maturity), the narrator's relationship to Him at the time, and what that memory means to them now.`,
+
+  bk_meditation_inner_state: `${BK_BASE}
+
+Find every account of Gurudevshri's personal sadhana, meditation, or inner experience — either witnessed by a devotee or described in His own words. This includes: accounts of His dhyan practice, references to Bhedjnan (the distinction between Self and non-Self), descriptions of His inner state during or after meditation, unusual stillness or radiance noticed by observers, and moments where He pointed others toward their own inner state. Note: the setting, who was present, what was seen or said, and what stage of spiritual depth it pointed to.`,
+
+  bk_study_group: `${BK_BASE}
+
+Find every account related to the Study Group — the intimate group of young seekers from Gurudevshri's early years who received His personal attention through satsang, shared trips, study sessions, and informal time together. For each account, note: who was part of the group, the approximate era (early years of His teaching), the specific activity or setting (trip, study session, discussion), what He taught or transmitted in that context, and how that personal touch shaped the devotee's path. Look for references to group study, youth retreats, personal trips, and the closeness of that early circle.`,
 }
 
-const BK_GENERAL_SUFFIX = `
+const BK_CANONICAL_TAGS = `
+
+When extracting tags, prefer these canonical tag values when the story context matches:
+train | bus | cycle | walking | running | boating | beach | snow | dining_table | phone_call | night_satsang | games_playfulness | jeevdaya | monument | visionary | seva | informal_youth | he_as_devotee | relation_pkd | sadhana | family_member | study_group | closing_accounts | question_answer | meditation | dhyan | bhedjnan | inner_state | same_incident_diff_ajna | gurudev_as_child
+
+Use them exactly as written above (snake_case). Add other free-form tags as needed for content not covered above.`
+
+const BK_GENERAL_SUFFIX = `${BK_CANONICAL_TAGS}
 
 Return ONLY structured blocks in this exact format:
 

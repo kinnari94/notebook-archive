@@ -126,7 +126,30 @@ async function streamAsk(cookie: string, notebookId: string, question: string): 
   )
 
   if (!res.ok) throw new Error(`Chat HTTP error ${res.status}`)
-  const text = await res.text()
+
+  // Stream the response in chunks instead of buffering everything at once.
+  // NotebookLM responses can exceed 50MB for large notebooks; we collect
+  // chunks until the stream ends or we've seen enough to parse the answer.
+  const MAX_BYTES = 200 * 1024 * 1024 // 200MB hard ceiling
+  let text = ''
+  let bytesRead = 0
+  const reader = res.body?.getReader()
+  const decoder = new TextDecoder()
+  if (reader) {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      const chunk = decoder.decode(value, { stream: true })
+      text += chunk
+      bytesRead += value?.byteLength ?? 0
+      if (bytesRead > MAX_BYTES) {
+        reader.cancel()
+        break
+      }
+    }
+  } else {
+    text = await res.text()
+  }
 
   // Parse chunked streaming response — find the final marked answer
   const RPC_KEY = 'GenerateFreeFormStreamed'

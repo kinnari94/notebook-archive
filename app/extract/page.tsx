@@ -38,6 +38,13 @@ const BK_CATEGORIES = [
   { key: 'bk_satsang_transformation', label: 'Satsang / Transformation',         icon: '📖' },
   { key: 'bk_love_for_pkd',           label: 'Love for PKD / Bhakti',            icon: '🙏' },
   { key: 'bk_letters_mails',          label: 'Letters / Mails',                  icon: '✉️' },
+  { key: 'bk_night_satsang',          label: 'Night Satsang',                    icon: '🌙' },
+  { key: 'bk_question_answer',        label: 'Question & Answer',                icon: '❓' },
+  { key: 'bk_closing_accounts',       label: 'Closing Accounts',                 icon: '🔐' },
+  { key: 'bk_same_incident_diff_ajna',label: 'Same Incident, Different Ajna',    icon: '🔀' },
+  { key: 'bk_gurudev_as_child',       label: 'Gurudev as a Child',               icon: '🧒' },
+  { key: 'bk_meditation_inner_state', label: 'Meditation & Inner State',         icon: '🧘' },
+  { key: 'bk_study_group',            label: 'Study Group',                      icon: '📚' },
 ]
 
 function isBKNotebook(title: string): boolean {

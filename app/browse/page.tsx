@@ -29,7 +29,14 @@ const BK_CATEGORIES: Record<string, { label: string; accent: string }> = {
   bk_children_teaching:     { label: 'Children / Teaching Through Play', accent: '#BE185D' },
   bk_satsang_transformation:{ label: 'Satsang / Transformation',         accent: '#A21CAF' },
   bk_love_for_pkd:          { label: 'Love for PKD / Bhakti',            accent: '#C2410C' },
-  bk_letters_mails:         { label: 'Letters / Mails',                  accent: '#0369A1' },
+  bk_letters_mails:          { label: 'Letters / Mails',                 accent: '#0369A1' },
+  bk_night_satsang:          { label: 'Night Satsang',                   accent: '#1E3A5F' },
+  bk_question_answer:        { label: 'Question & Answer',               accent: '#5B21B6' },
+  bk_closing_accounts:       { label: 'Closing Accounts',                accent: '#374151' },
+  bk_same_incident_diff_ajna:{ label: 'Same Incident, Different Ajna',   accent: '#9D174D' },
+  bk_gurudev_as_child:       { label: 'Gurudev as a Child',              accent: '#92400E' },
+  bk_meditation_inner_state: { label: 'Meditation & Inner State',        accent: '#065F46' },
+  bk_study_group:            { label: 'Study Group',                     accent: '#1D4ED8' },
 }
 
 type Source = 'standard' | 'bapa_katha'
@@ -52,6 +59,8 @@ export default function Browse() {
   const [sortSequence,    setSortSequence]    = useState<'asc' | 'desc'>('asc')
   const [layoutMode,      setLayoutMode]      = useState<'grid' | 'list'>('grid')
   const [visibleCount,    setVisibleCount]    = useState(12)
+  const [selectedTags,    setSelectedTags]    = useState<string[]>([])
+  const [tagDropdownOpen, setTagDropdownOpen] = useState(false)
 
   const activeCategoryMeta = source === 'bapa_katha' ? BK_CATEGORIES : STANDARD_CATEGORIES
 
@@ -75,9 +84,17 @@ export default function Browse() {
     fetch('/api/locations').then(r => r.json()).then(d => setLocations(d.locations || []))
   }, [])
 
+  const CANONICAL_TAGS = [
+    'train', 'bus', 'cycle', 'walking', 'running', 'boating', 'beach', 'snow',
+    'dining_table', 'phone_call', 'night_satsang', 'games_playfulness', 'jeevdaya',
+    'monument', 'visionary', 'seva', 'informal_youth', 'he_as_devotee', 'relation_pkd',
+    'sadhana', 'family_member', 'study_group', 'closing_accounts', 'question_answer',
+    'meditation', 'dhyan', 'bhedjnan', 'inner_state', 'same_incident_diff_ajna', 'gurudev_as_child',
+  ]
+
   const clearFilters = () => {
     setSearchKeyword(''); setSelectedCategory(''); setSearchPerson('')
-    setSearchLocation(''); setYearFrom(''); setYearTo(''); setVisibleCount(12)
+    setSearchLocation(''); setYearFrom(''); setYearTo(''); setSelectedTags([]); setVisibleCount(12)
   }
 
   const handleSourceChange = (s: Source) => { setSource(s); clearFilters() }
@@ -115,16 +132,18 @@ export default function Browse() {
     }
     if (yearFrom) result = result.filter(i => i.date?.year && i.date.year >= parseInt(yearFrom))
     if (yearTo)   result = result.filter(i => i.date?.year && i.date.year <= parseInt(yearTo))
+    if (selectedTags.length > 0)
+      result = result.filter(i => selectedTags.every(t => i.tags?.includes(t)))
     result.sort((a, b) => {
       const ya = a.date?.year ?? 9999, yb = b.date?.year ?? 9999
       return sortSequence === 'asc' ? ya - yb : yb - ya
     })
     return result
-  }, [allIncidents, selectedCategory, searchKeyword, searchPerson, searchLocation, yearFrom, yearTo, sortSequence])
+  }, [allIncidents, selectedCategory, searchKeyword, searchPerson, searchLocation, yearFrom, yearTo, sortSequence, selectedTags])
 
   const visibleIncidents = useMemo(() => filteredIncidents.slice(0, visibleCount), [filteredIncidents, visibleCount])
 
-  const hasActiveFilters = selectedCategory || searchKeyword || searchPerson || searchLocation || yearFrom || yearTo
+  const hasActiveFilters = selectedCategory || searchKeyword || searchPerson || searchLocation || yearFrom || yearTo || selectedTags.length > 0
 
   return (
     <div className="min-h-screen bg-[#faf8f5] text-[#1c1917] pb-24 px-4 sm:px-6 lg:px-8 pt-8">
@@ -207,7 +226,7 @@ export default function Browse() {
             )}
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
             {/* Keyword */}
             <div className="flex flex-col gap-1 sm:col-span-2">
               <label className="text-[11px] font-bold text-stone-500 tracking-wide uppercase">Keyword Search</label>
@@ -261,6 +280,41 @@ export default function Browse() {
                   className="w-1/2 bg-[#fcfbfa] text-[#1c1917] placeholder-stone-400 text-center rounded-lg py-2 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#1C3D27] border border-[#E9E4DF] font-mono" />
               </div>
             </div>
+            {/* Tags multiselect */}
+            <div className="flex flex-col gap-1 relative">
+              <label className="text-[11px] font-bold text-stone-500 tracking-wide uppercase">Tags</label>
+              <button
+                onClick={() => setTagDropdownOpen(v => !v)}
+                className="w-full bg-[#fcfbfa] text-[#1c1917] rounded-lg px-3 py-2 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#1C3D27] border border-[#E9E4DF] flex items-center justify-between gap-2 text-left"
+              >
+                <span className="truncate text-stone-500">
+                  {selectedTags.length === 0 ? 'Any tags' : selectedTags.map(t => t.replace(/_/g, ' ')).join(', ')}
+                </span>
+                <ChevronDown className={`w-3.5 h-3.5 text-stone-400 shrink-0 transition-transform ${tagDropdownOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {tagDropdownOpen && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-[#E9E4DF] rounded-xl shadow-lg z-20 max-h-64 overflow-y-auto py-1">
+                  {CANONICAL_TAGS.map(tag => {
+                    const active = selectedTags.includes(tag)
+                    return (
+                      <button
+                        key={tag}
+                        onClick={() => {
+                          setSelectedTags(prev => active ? prev.filter(t => t !== tag) : [...prev, tag])
+                          setVisibleCount(12)
+                        }}
+                        className={`w-full text-left px-3 py-1.5 text-xs font-mono flex items-center gap-2 transition-colors ${active ? 'bg-[#1C3D27]/5 text-[#1C3D27] font-bold' : 'text-stone-600 hover:bg-stone-50'}`}
+                      >
+                        <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 ${active ? 'bg-[#1C3D27] border-[#1C3D27]' : 'border-stone-300'}`}>
+                          {active && <span className="text-white text-[8px] font-bold">✓</span>}
+                        </span>
+                        {tag.replace(/_/g, ' ')}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Active filter tags */}
@@ -294,6 +348,12 @@ export default function Browse() {
                   <button onClick={() => { setYearFrom(''); setYearTo('') }}><X className="w-3 h-3" /></button>
                 </span>
               )}
+              {selectedTags.map(tag => (
+                <span key={tag} className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-800 px-2.5 py-0.5 rounded-full text-[11px] font-mono font-medium border border-emerald-100">
+                  #{tag.replace(/_/g, ' ')}
+                  <button onClick={() => setSelectedTags(prev => prev.filter(t => t !== tag))}><X className="w-3 h-3" /></button>
+                </span>
+              ))}
             </div>
           )}
         </section>

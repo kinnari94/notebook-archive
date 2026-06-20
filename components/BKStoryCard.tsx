@@ -20,6 +20,13 @@ const BK_CATEGORY_COLORS: Record<string, { label: string; icon: string; accent: 
   bk_satsang_transformation:{ label: 'Satsang / Transformation',         icon: '📖', accent: '#A21CAF' },
   bk_love_for_pkd:          { label: 'Love for PKD / Bhakti',            icon: '🙏', accent: '#C2410C' },
   bk_letters_mails:         { label: 'Letters / Mails',                  icon: '✉️', accent: '#0369A1' },
+  bk_night_satsang:         { label: 'Night Satsang',                    icon: '🌙', accent: '#1E3A5F' },
+  bk_question_answer:       { label: 'Question & Answer',                icon: '❓', accent: '#5B21B6' },
+  bk_closing_accounts:      { label: 'Closing Accounts',                 icon: '🔐', accent: '#374151' },
+  bk_same_incident_diff_ajna:{ label: 'Same Incident, Different Ajna',   icon: '🔀', accent: '#9D174D' },
+  bk_gurudev_as_child:      { label: 'Gurudev as a Child',               icon: '🧒', accent: '#92400E' },
+  bk_meditation_inner_state:{ label: 'Meditation & Inner State',         icon: '🧘', accent: '#065F46' },
+  bk_study_group:           { label: 'Study Group',                      icon: '📚', accent: '#1D4ED8' },
 }
 
 function HighlightText({ text, highlight }: { text: string; highlight?: string }) {
