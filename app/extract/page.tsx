@@ -260,7 +260,9 @@ export default function Extract() {
             </div>
             {(selectedNbs.length > 0 || selectedCats.length > 0) && (
               <p className="text-xs text-muted mt-3">
-                {selectedNbs.length} notebook{selectedNbs.length !== 1 ? 's' : ''} × {selectedCats.length} categor{selectedCats.length !== 1 ? 'ies' : 'y'} = {selectedNbs.length * selectedCats.length} queries
+                {hasStandard && <>{selectedNbs.length - bkIds.length} standard notebook{selectedNbs.length - bkIds.length !== 1 ? 's' : ''} × {selectedCats.length} categor{selectedCats.length !== 1 ? 'ies' : 'y'}</>}
+                {hasStandard && hasBK && <span className="mx-1">·</span>}
+                {hasBK && <>{bkIds.length} Bapa Katha notebook{bkIds.length !== 1 ? 's' : ''} — 1 query per source (count known after start)</>}
               </p>
             )}
           </div>

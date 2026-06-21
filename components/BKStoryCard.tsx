@@ -58,7 +58,9 @@ interface BKStory {
   time_life_stage?: string
   location?: string
   person?: string
+  other_people?: string[]
   people?: string[]
+  categories?: string[]
   category?: string
   tags?: string[]
   source_notebook_title?: string
@@ -69,17 +71,30 @@ interface Props {
   story: BKStory
   layout?: 'grid' | 'list'
   highlightQuery?: string
+  activeCategoryFilter?: string
 }
 
-export default function BKStoryCard({ story, layout = 'grid', highlightQuery = '' }: Props) {
+export default function BKStoryCard({ story, layout = 'grid', highlightQuery = '', activeCategoryFilter }: Props) {
   const [isCopied, setIsCopied] = useState(false)
   const [isBodyExpanded, setIsBodyExpanded] = useState(false)
 
-  const meta = BK_CATEGORY_COLORS[story.category || ''] ?? {
-    label: (story.category || 'Bapa Katha').replace(/bk_/g, '').replace(/_/g, ' '),
+  const allCats = (story.categories?.length ? story.categories : story.category ? [story.category] : [])
+  // When filtered by a category, show only that pill; otherwise show all
+  const cats = activeCategoryFilter && allCats.includes(activeCategoryFilter)
+    ? [activeCategoryFilter]
+    : allCats
+  const catMetas = cats.map(c => BK_CATEGORY_COLORS[c] ?? {
+    label: c.replace(/^bk_/, '').replace(/_/g, ' '),
     icon: '📖',
     accent: '#92400E',
-  }
+  })
+  // Primary meta drives the accent glow and location/person chip colours
+  const meta = catMetas[0] ?? { label: 'Bapa Katha', icon: '📖', accent: '#92400E' }
+
+  const allPeople = [
+    ...(story.people ?? (story.person && story.person !== 'not specified' ? [story.person] : [])),
+    ...(story.other_people ?? []),
+  ].filter((p, i, a) => p && p !== 'not specified' && a.indexOf(p) === i)
 
   const displayId = story.story_id ? `#${story.story_id}` : 'REF-' + story._id.slice(-6).toUpperCase()
   const body = story.what_happened || story.summary || ''
@@ -106,11 +121,15 @@ export default function BKStoryCard({ story, layout = 'grid', highlightQuery = '
         </div>
 
         <div className="flex-1 min-w-0">
-          <div className="flex flex-wrap items-center gap-2 mb-1 text-[11px] font-sans font-bold select-none text-[#564940]">
-            <span className="w-2 h-2 rounded-full inline-block shrink-0" style={{ backgroundColor: meta.accent }} />
-            <span className="uppercase tracking-wide">{meta.label}</span>
-            <span className="text-[#D0C0B4]">/</span>
-            <span className="text-[#A1958C] font-normal font-mono">{displayId}</span>
+          <div className="flex flex-wrap items-center gap-1.5 mb-1.5 select-none">
+            {catMetas.map((m, i) => (
+              <span key={i} className="inline-flex items-center gap-1 text-[10px] font-sans font-semibold px-2 py-0.5 rounded-full border"
+                style={{ backgroundColor: m.accent + '10', color: m.accent, borderColor: m.accent + '22' }}>
+                <span>{m.icon}</span>
+                <span>{m.label}</span>
+              </span>
+            ))}
+            <span className="text-[#C4B5AD] text-[10px] font-mono ml-1">{displayId}</span>
           </div>
           {story.story_title && (
             <p className="font-sans text-[#2C2117] text-[14.5px] leading-relaxed font-light tracking-wide mb-1">
@@ -124,14 +143,14 @@ export default function BKStoryCard({ story, layout = 'grid', highlightQuery = '
               </p>
             </div>
           )}
-          {(story.location && story.location !== 'not specified') || story.person || (story.people && story.people.length > 0) ? (
+          {(story.location && story.location !== 'not specified') || allPeople.length > 0 ? (
             <div className="mt-1.5 flex flex-wrap items-center gap-2">
               {story.location && story.location !== 'not specified' && (
                 <span className="inline-flex items-center gap-1 text-[10px] font-mono text-stone-500">
                   <MapPin className="w-2.5 h-2.5" />{story.location}
                 </span>
               )}
-              {(story.people ?? (story.person ? [story.person] : [])).filter(p => p && p !== 'not specified').map((p, i) => (
+              {allPeople.map((p, i) => (
                 <span key={i} className="inline-flex items-center gap-1 text-[10px] font-mono text-sky-600">
                   <User className="w-2.5 h-2.5" />{p}
                 </span>
@@ -163,37 +182,37 @@ export default function BKStoryCard({ story, layout = 'grid', highlightQuery = '
   // ── GRID layout ──────────────────────────────────────────────────────────
   return (
     <div className="group relative bg-[#FDFBF9] border border-[#E9E4DF] rounded-[24px] p-6 transition-all duration-300 hover:bg-[#FAF6F1] flex flex-col justify-between h-full hover:shadow-[0_12px_36px_rgba(118,91,73,0.06)] hover:border-[#D6CEC5] hover:-translate-y-1 overflow-hidden">
-      {/* Accent glow */}
-      <div className="absolute top-0 right-0 w-32 h-32 blur-[40px] opacity-[0.04] group-hover:opacity-[0.08] transition-opacity duration-300 rounded-full pointer-events-none" style={{ backgroundColor: meta.accent }} />
+      {/* Accent glow — always driven by primary category */}
+      <div className="absolute top-0 right-0 w-36 h-36 blur-[48px] opacity-[0.05] group-hover:opacity-[0.10] transition-opacity duration-300 rounded-full pointer-events-none" style={{ backgroundColor: meta.accent }} />
 
       <div>
-        {/* Status bar — category + time stage pill + clip badge + ref id */}
+        {/* Header — accent dot + time stage + ref id */}
         <div className="flex items-center justify-between gap-2 mb-4 pb-2 border-b border-[#F2ECE6]">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="w-2 h-2 rounded-full inline-block shrink-0" style={{ backgroundColor: meta.accent }} />
-            <span className="text-[11px] font-sans font-bold text-[#564940] uppercase tracking-widest">{meta.label}</span>
-            {story.time_life_stage && story.time_life_stage !== 'not specified' && (
-              <span className="text-[11px] font-sans font-bold px-2 py-0.5 rounded border ml-1"
-                style={{ backgroundColor: meta.accent + '12', color: meta.accent, borderColor: meta.accent + '30' }}>
-                {story.time_life_stage}
-              </span>
-            )}
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: meta.accent }} />
+            {story.time_life_stage && story.time_life_stage !== 'not specified'
+              ? <span className="text-[11px] font-sans font-semibold px-2 py-0.5 rounded-full border"
+                  style={{ backgroundColor: meta.accent + '12', color: meta.accent, borderColor: meta.accent + '30' }}>
+                  {story.time_life_stage}
+                </span>
+              : <span className="text-[11px] font-mono text-[#B8A99E]">Bapa Katha</span>
+            }
           </div>
-          <span className="text-[10px] font-sans font-medium text-[#A1958C] tracking-wide shrink-0">{displayId}</span>
+          <span className="text-[10px] font-mono text-[#C4B5AD] shrink-0">{displayId}</span>
         </div>
 
-        {/* Story title — primary description */}
+        {/* Story title */}
         {story.story_title && (
           <div className="mb-4">
-            <p className="font-sans text-[#2C2117] text-[14.5px] leading-relaxed antialiased font-light tracking-wide">
+            <p className="font-sans text-[#2C2117] text-[15px] leading-snug antialiased font-medium tracking-tight">
               <HighlightText text={story.story_title} highlight={highlightQuery} />
             </p>
           </div>
         )}
 
-        {/* Body — source quote with accent border */}
+        {/* Body */}
         {body && (
-          <div className="mb-4 pl-3 border-l-2" style={{ borderColor: meta.accent + '60' }}>
+          <div className="mb-4 pl-3 border-l-2" style={{ borderColor: meta.accent + '50' }}>
             <p className={`font-sans font-light text-[#645A51] text-[13px] leading-relaxed italic ${!isBodyExpanded ? 'line-clamp-2' : ''}`}>
               "<HighlightText text={body} highlight={highlightQuery} />"
             </p>
@@ -224,29 +243,41 @@ export default function BKStoryCard({ story, layout = 'grid', highlightQuery = '
         )}
       </div>
 
-      <div>
-        {/* Free-form tags */}
-        {story.tags && story.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1 mb-3">
-            {story.tags.map((tag, i) => (
-              <span key={i} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-stone-100 text-stone-500 border border-stone-200/60">
-                {tag}
+      <div className="space-y-3">
+        {/* Category chips — icon + short label, all categories shown here */}
+        {catMetas.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {catMetas.map((m, i) => (
+              <span key={i} className="inline-flex items-center gap-1 text-[10px] font-sans font-semibold px-2 py-0.5 rounded-full border"
+                style={{ backgroundColor: m.accent + '10', color: m.accent, borderColor: m.accent + '22' }}>
+                <span>{m.icon}</span>
+                <span>{m.label}</span>
               </span>
             ))}
           </div>
         )}
 
-        {/* Location + Person chips */}
-        {((story.location && story.location !== 'not specified') || story.person || (story.people && story.people.length > 0)) && (
-          <div className="flex flex-wrap gap-1.5 mb-4 select-none">
+        {/* Tags */}
+        {story.tags && story.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {story.tags.map((tag, i) => (
+              <span key={i} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-stone-100 text-stone-400 border border-stone-200/60">
+                #{tag}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Location + People */}
+        {((story.location && story.location !== 'not specified') || allPeople.length > 0) && (
+          <div className="flex flex-wrap gap-1.5 select-none">
             {story.location && story.location !== 'not specified' && (
-              <span className="inline-flex items-center gap-1 text-[10px] font-mono font-medium px-2 py-0.5 rounded border"
-                style={{ backgroundColor: meta.accent + '10', color: meta.accent, borderColor: meta.accent + '25' }}>
+              <span className="inline-flex items-center gap-1 text-[10px] font-mono font-medium px-2 py-0.5 rounded-full border border-stone-200 bg-stone-50 text-stone-500">
                 <MapPin className="w-2.5 h-2.5" /><HighlightText text={story.location} highlight={highlightQuery} />
               </span>
             )}
-            {(story.people ?? (story.person ? [story.person] : [])).filter(p => p && p !== 'not specified').map((p, i) => (
-              <span key={i} className="inline-flex items-center gap-1 text-[10px] font-mono font-medium px-2 py-0.5 rounded border bg-sky-50 text-sky-700 border-sky-100">
+            {allPeople.map((p, i) => (
+              <span key={i} className="inline-flex items-center gap-1 text-[10px] font-mono font-medium px-2 py-0.5 rounded-full border bg-sky-50 text-sky-600 border-sky-100">
                 <User className="w-2.5 h-2.5" /><HighlightText text={p} highlight={highlightQuery} />
               </span>
             ))}
@@ -254,25 +285,25 @@ export default function BKStoryCard({ story, layout = 'grid', highlightQuery = '
         )}
 
         {/* Actions */}
-        <div className="flex items-center justify-between gap-2 pt-2.5 border-t border-[#F2ECE6] text-[11px] font-sans font-bold">
-          <button onClick={handleCopy} className="text-[#645A51] hover:text-[#2C2117] transition-colors flex items-center gap-1 cursor-pointer select-none">
+        <div className="flex items-center justify-between gap-2 pt-2 border-t border-[#F2ECE6] text-[11px] font-sans">
+          <button onClick={handleCopy} className="text-[#A1958C] hover:text-[#2C2117] transition-colors flex items-center gap-1 cursor-pointer select-none font-medium">
             {isCopied
-              ? <><Check className="w-3 h-3 stroke-[2.5]" /> copied ✓</>
-              : <><Copy className="w-3 h-3" /> copy story</>
+              ? <><Check className="w-3 h-3 stroke-[2.5]" /> copied</>
+              : <><Copy className="w-3 h-3" /> copy</>
             }
           </button>
-          <div className="flex items-center gap-3 ml-auto">
+          <div className="flex items-center gap-3">
             {story.source_notebook_title && (
-              <span className="text-[10px] font-mono text-[#A1958C] truncate max-w-[120px]" title={story.source_notebook_title}>
-                📓 {story.source_notebook_title}
+              <span className="text-[10px] font-mono text-[#C4B5AD] truncate max-w-[120px]" title={story.source_notebook_title}>
+                {story.source_notebook_title}
               </span>
             )}
             {story.nlm_source_links?.[0]
               ? <a href={story.nlm_source_links[0].nlm_url} target="_blank" rel="noopener noreferrer"
-                  className="text-[#794E2C] hover:text-[#533013] transition-colors hover:underline">
+                  className="font-medium transition-colors hover:underline" style={{ color: meta.accent }}>
                   source ↗
                 </a>
-              : <span className="text-[10px] text-[#A6978C] font-mono font-medium">local.db</span>
+              : <span className="text-[10px] text-[#C4B5AD] font-mono">local.db</span>
             }
           </div>
         </div>

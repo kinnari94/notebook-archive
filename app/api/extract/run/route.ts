@@ -10,7 +10,9 @@ function contentHash(notebookId: string, category: string, key: string): string 
     .digest('hex')
 }
 
-const ASK_SCRIPT = join(process.cwd(), 'scripts', 'nlm_ask.py')
+const ASK_SCRIPT        = join(process.cwd(), 'scripts', 'nlm_ask.py')
+const ASK_SOURCE_SCRIPT = join(process.cwd(), 'scripts', 'nlm_ask_source.py')
+const SOURCES_SCRIPT    = join(process.cwd(), 'scripts', 'nlm_sources.py')
 const PYTHON = process.platform === 'win32' ? 'python' : 'python3'
 
 // ─── Standard extraction ────────────────────────────────────────────────────
@@ -126,139 +128,86 @@ function parseResponse(text: string, category: string): ParsedIncident[] {
 
 // ─── Bapa Katha extraction ───────────────────────────────────────────────────
 
-const BK_BASE = `This is a Bapa Katha transcript — devotee interviews sharing personal experiences with Gurudevshri / Bapaji.
-Be exhaustive. Extract every relevant moment. This transcript should not need to be re-run.`
+const BK_ALL_PROMPT = `You are extracting incidents from a Bapa Katha transcript — recordings of devotees sharing personal experiences with Pujya Gurudevshri / Bapaji.
 
-const BK_PROMPTS: Record<string, string> = {
-  bk_line_that_changed_me: `${BK_BASE}
+IMPORTANT: Always respond entirely in English, regardless of the language of the source material.
 
-Find every instance where a devotee recalls a single sentence or phrase spoken by Gurudevshri that caused an immediate or lasting shift in their thinking, behavior, or life direction. For each instance, note: the exact words spoken, the situation in which it was said, the devotee's state before hearing it, and what changed after. Also find moments where a devotee brought a specific personal question to Gurudevshri and received an answer that redirected their inner life.`,
+CRITICAL — DO NOT HALLUCINATE:
+- Only extract incidents that are explicitly described in the source text. Do not infer, imagine, or elaborate beyond what is directly stated.
+- Only use names of people that are explicitly mentioned in the text. If a person is unnamed, write "not specified" — do not guess or assign a generic name.
+- Only use place names that are explicitly mentioned. If a location is not named, write "not specified" — do not infer it from context.
+- For WHAT_GURUDEV_SAID: only quote words that the transcript explicitly attributes to Him. If not quoted directly, write "exact wording not available".
+- If a field's information is not present in the source, always write "not specified" rather than guessing.
 
-  bk_shared_events: `${BK_BASE}
+Go through every source in this notebook one by one. For each source, extract every distinct incident or moment the devotee describes. Each discrete incident gets its own STORY block — do not merge or skip any.
 
-Find all instances where multiple devotees describe being present at the same specific event — a yatra, a satsang, a pratishtha, a paryushan, a shibir. For each shared event, note: the location and approximate year, what each person remembers seeing or hearing, any differences in what each person noticed, and what made that specific gathering memorable or transformative.`,
+For CATEGORIES, assign one or more from this list (a single story may fit several):
+bk_first_meeting | bk_humour | bk_one_ajna | bk_the_object | bk_discipline_training | bk_dasha_family | bk_non_jain | bk_he_found_me_first | bk_he_doesnt_see_time | bk_vision_behind_projects | bk_compassion_seva | bk_children_teaching | bk_satsang_transformation | bk_love_for_pkd | bk_letters_mails | bk_night_satsang | bk_question_answer | bk_closing_accounts | bk_same_incident_diff_ajna | bk_gurudev_as_child | bk_meditation_inner_state | bk_study_group | bk_line_that_changed_me | bk_shared_events
 
-  bk_first_meeting: `${BK_BASE}
+Category meanings:
+- bk_first_meeting: devotee's very first encounter with Gurudevshri
+- bk_humour: playful, witty, or teasing moments
+- bk_one_ajna: a specific personal instruction given to an individual
+- bk_the_object: a physical object central to the interaction
+- bk_discipline_training: stern correction, rebuke, or difficult instruction
+- bk_dasha_family: observations by family/childhood acquaintances of His inner state
+- bk_non_jain: devotees from outside the Jain tradition
+- bk_he_found_me_first: Gurudevshri reaching out to a soul before they sought Him
+- bk_he_doesnt_see_time: His unusual relationship with time, sleep, and rest
+- bk_vision_behind_projects: a vision He expressed for something before it existed
+- bk_compassion_seva: acts of compassion toward anyone in distress
+- bk_children_teaching: involving children, or teaching through play/games
+- bk_satsang_transformation: attending satsang changed or resolved something
+- bk_love_for_pkd: devotion to Param Krupalu Dev
+- bk_letters_mails: letters or written communication
+- bk_night_satsang: satsang or guidance given at night or unusual hours
+- bk_question_answer: a specific question asked and answered
+- bk_closing_accounts: settling a karmic or personal account
+- bk_same_incident_diff_ajna: two devotees describe the same event differently
+- bk_gurudev_as_child: accounts of His childhood or early youth
+- bk_meditation_inner_state: His personal sadhana, dhyan, or inner experience
+- bk_study_group: the intimate early circle of young seekers
+- bk_line_that_changed_me: a single phrase that caused a lasting shift
+- bk_shared_events: multiple devotees present at the same event
 
-Find every account of a devotee's very first encounter with Gurudevshri. For each first meeting, note: how the meeting happened (was it planned or accidental), what the devotee's attitude or state was before meeting Him, the first thing they noticed or felt, any words spoken, and how their life shifted from that moment onward.`,
-
-  bk_humour: `${BK_BASE}
-
-Find every instance of Gurudevshri being playful, witty, teasing, or using humor — with children, with devotees, in informal settings, in response to devotees' mistakes, or during games and outings. For each instance, note: the exact playful action or words, who was present, the devotee's reaction, and whether the humor carried a hidden teaching.`,
-
-  bk_one_ajna: `${BK_BASE}
-
-Find every instance where Gurudevshri gave a specific personal instruction — about career, marriage, diet, business, daily practice, relationships, or life decisions — to an individual devotee. For each instance, note: what the devotee's situation or dilemma was, the exact guidance given, how the guidance was delivered (direct, through a question, through a story), whether the devotee followed it, and what the outcome was.`,
-
-  bk_the_object: `${BK_BASE}
-
-Find every instance where a physical object plays a central role in an interaction with Gurudevshri — something He gave, received, refused, used, threw, or pointed to. For each instance, note: what the object was, the exact moment involving it, what He said or did with it, who received or witnessed it, and whether the object still exists with that person today.`,
-
-  bk_discipline_training: `${BK_BASE}
-
-Find every instance where Gurudevshri was visibly stern, corrective, or gave a difficult instruction — removing someone from a role, asking someone to leave, assigning a penance, refusing a request, or delivering a sharp rebuke. For each instance, note: what triggered the correction, the exact words or action used, the devotee's immediate reaction, and how the devotee understood or reframed that strictness in hindsight.`,
-
-  bk_dasha_family: `${BK_BASE}
-
-Find every instance where a blood relative, childhood neighbor, or person who knew Gurudevshri before He was publicly known describes an observation of His inner state or unusual behavior — in childhood, teenage years, or early youth. For each instance, note: the approximate age of Gurudevshri at the time, what was observed (stillness, unusual knowledge, detachment, spontaneous teaching), the setting, and the narrator's own understanding of what they were witnessing.`,
-
-  bk_non_jain: `${BK_BASE}
-
-Find every instance involving a devotee who came from outside the Jain tradition — a different religion, a different cultural background, a different country or language — and how Gurudevshri connected with or guided them. For each instance, note: who the person was and what their background was, how the connection was established, any specific words or actions by Gurudevshri toward them, and what drew or kept that person in His circle.`,
-
-  bk_he_found_me_first: `${BK_BASE}
-
-Find every instance where Gurudevshri initiated contact, waited for, traveled toward, or specifically reached out to a devotee who was not actively seeking — or a moment where He demonstrated He had been watching, waiting, or working for a soul before that soul was aware of Him. For each instance, note: what Gurudevshri did or said that was unexpected, the devotee's state or distance from spiritual seeking at that time, and the devotee's response on realizing they had been found first.`,
-
-  bk_he_doesnt_see_time: `${BK_BASE}
-
-Find every instance that reveals Gurudevshri's relationship with time — staying awake through the night, replying to letters or emails before sleeping, attending to individuals at unusual hours, being present at dawn for sadhana, continuing without rest across days of yatra or shibir. For each instance, note: the time of day or night, what He was doing, who witnessed it, and what it revealed about His inner state or commitment.`,
-
-  bk_vision_behind_projects: `${BK_BASE}
-
-Find every instance where Gurudevshri expressed a vision of what the mission, an ashram, a community, or a project would become — before it existed. For each instance, note: the exact words of the vision as spoken, the setting and approximate year, who was present, and what eventually came to pass that matched or exceeded what He described.`,
-
-  bk_compassion_seva: `${BK_BASE}
-
-Find every instance that reveals Gurudevshri's compassion — toward animals, the ill, the poor, children, strangers, or devotees in distress. For each instance, note: who or what was the recipient of the compassion, the specific action or words Gurudevshri used, whether He planted the impulse for seva in a devotee, and how that compassion extended beyond the moment into ongoing action or mission work.`,
-
-  bk_children_teaching: `${BK_BASE}
-
-Find every instance involving children — either Gurudevshri as a child teaching others, or Gurudevshri teaching children through games, play, stories, or informal settings in His later years. For each instance, note: the age of Gurudevshri or the children involved, the specific activity or game, the teaching that was woven into it, and whether the child grew up to carry that teaching forward.`,
-
-  bk_satsang_transformation: `${BK_BASE}
-
-Find every instance where a devotee describes how attending satsang — a single session or over time — changed them, answered an unspoken question, dissolved a habit or addiction, or resolved a life situation without the devotee explicitly asking for help. For each instance, note: what the devotee's inner state or outer situation was before the satsang, what was spoken in satsang, what shifted, and whether the transformation was immediate or gradual.`,
-
-  bk_love_for_pkd: `${BK_BASE}
-
-Find every instance that reveals the depth of Gurudevshri's personal devotion to Param Krupalu Dev — through bhakti, through how He speaks about Him, through the intensity of His practice, through how He transmitted that love to others. For each instance, note: the specific words, actions, or expressions of devotion, the setting, the devotee witnessing it, and what it conveyed about the nature of His relationship with Param Krupalu Dev.`,
-
-  bk_letters_mails: `${BK_BASE}
-
-Find every instance involving a letter or written communication — a letter written by Gurudevshri to a devotee, a letter a devotee received in a moment of crisis, a patrank being read aloud, or the practice of mail replies before sleep. For each instance, note: who the letter was to or from, the occasion or need that prompted it, any specific words quoted or remembered, and what the letter meant to the person who received it.`,
-
-  bk_night_satsang: `${BK_BASE}
-
-Find every instance of Gurudevshri conducting satsang, giving guidance, or attending to devotees at night — late evenings, after midnight, or early pre-dawn hours. For each instance, note: the approximate time, the setting, who was present, what was discussed or transmitted, and why night was chosen or simply when it happened. Also capture any stories of seekers who approached Him at unusual hours and received personal attention.`,
-
-  bk_question_answer: `${BK_BASE}
-
-Find every instance where a devotee posed a direct question to Gurudevshri — about life decisions, spiritual doubt, philosophical puzzles, personal struggles, or practical matters — and He gave a specific answer. For each instance, note: the exact question as asked, the context in which it was posed (private, public satsang, walk, dining), the exact or paraphrased answer He gave, and whether the answer resolved the devotee's doubt or opened a new direction of inquiry.`,
-
-  bk_closing_accounts: `${BK_BASE}
-
-Find every instance where Gurudevshri settled, resolved, or closed a karmic or personal account with someone — a past acquaintance, a family member, an adversary, or a devotee. This includes moments where He visited, forgave, reconciled with, or completed an unfinished connection with a person from His or another's past. Note: who the person was, the nature of the prior relationship or debt, what Gurudevshri said or did, and how the account was considered closed.`,
-
-  bk_same_incident_diff_ajna: `${BK_BASE}
-
-Find every instance where two or more devotees describe the same event, the same gathering, or the same interaction with Gurudevshri — but received different instructions, had different experiences, or noticed different things. For each such case, note: the shared event or moment, each person's account of what they observed or were told, and what the difference in ajna or experience reveals about how He works individually within a collective.`,
-
-  bk_gurudev_as_child: `${BK_BASE}
-
-Find every account of Gurudevshri's childhood and early youth — told by family members, childhood neighbors, schoolmates, or elders who knew Him before He was publicly recognized. For each account, note: the approximate age of Gurudevshri, what was observed (unusual stillness, early signs of detachment, early spiritual questioning, acts of compassion or unusual maturity), the narrator's relationship to Him at the time, and what that memory means to them now.`,
-
-  bk_meditation_inner_state: `${BK_BASE}
-
-Find every account of Gurudevshri's personal sadhana, meditation, or inner experience — either witnessed by a devotee or described in His own words. This includes: accounts of His dhyan practice, references to Bhedjnan (the distinction between Self and non-Self), descriptions of His inner state during or after meditation, unusual stillness or radiance noticed by observers, and moments where He pointed others toward their own inner state. Note: the setting, who was present, what was seen or said, and what stage of spiritual depth it pointed to.`,
-
-  bk_study_group: `${BK_BASE}
-
-Find every account related to the Study Group — the intimate group of young seekers from Gurudevshri's early years who received His personal attention through satsang, shared trips, study sessions, and informal time together. For each account, note: who was part of the group, the approximate era (early years of His teaching), the specific activity or setting (trip, study session, discussion), what He taught or transmitted in that context, and how that personal touch shaped the devotee's path. Look for references to group study, youth retreats, personal trips, and the closeness of that early circle.`,
-}
-
-const BK_CANONICAL_TAGS = `
-
-When extracting tags, prefer these canonical tag values when the story context matches:
+For TAGS, prefer these canonical values when they match:
 train | bus | cycle | walking | running | boating | beach | snow | dining_table | phone_call | night_satsang | games_playfulness | jeevdaya | monument | visionary | seva | informal_youth | he_as_devotee | relation_pkd | sadhana | family_member | study_group | closing_accounts | question_answer | meditation | dhyan | bhedjnan | inner_state | same_incident_diff_ajna | gurudev_as_child
+Use them exactly as written (snake_case). Add free-form tags for anything not covered above.
 
-Use them exactly as written above (snake_case). Add other free-form tags as needed for content not covered above.`
-
-const BK_GENERAL_SUFFIX = `${BK_CANONICAL_TAGS}
-
-IMPORTANT: Return a maximum of 15 stories per response. If there are more, return only the 15 most significant ones. Keep WHAT_HAPPENED under 300 words per story.
+Keep WHAT_HAPPENED under 300 words per story.
 
 Return ONLY structured blocks in this exact format:
 
 STORY [1]
 STORY_ID: <INITIALS>-<N>
 STORY_TITLE: <short cinematic title>
-CATEGORY: <category key — e.g. bk_first_meeting>
+CATEGORIES: <comma-separated category keys — one or more>
 STORY_TYPE: <transformation | agna | satsang | bhakti | seva | youth | dasha | humour | crisis | family | mystical | vision | compassion | letter | object | correction>
 TIME_LIFE_STAGE: <year, decade, or life stage — "not specified" if unknown>
-LOCATION: <place — "not specified" if unknown>
-PERSON: <name of the devotee sharing this story — "not specified" if unknown>
-TAGS: <comma-separated tags from the canonical list, or free-form — NONE if none apply>
-SUMMARY: <2-line editorial summary>
-WHAT_HAPPENED: <concrete incident with specific details — avoid generic praise>
-WHAT_GURUDEV_SAID: <exact words if available — "exact wording not available" if not>
-TRANSFORMATION: <before state, inner shift, after state — "none evident" if not present>
+LOCATION: <place name explicitly stated in source — "not specified" if not mentioned>
+PERSON: <name of the devotee sharing this story — exactly as named in source, "not specified" if unnamed>
+OTHER_PEOPLE: <comma-separated names of other people explicitly named in this incident — "not specified" if none>
+TAGS: <comma-separated tags — NONE if none apply>
+SUMMARY: <2-line editorial summary using only details from the source>
+WHAT_HAPPENED: <concrete incident with specific details from the source — no elaboration beyond what is stated>
+WHAT_GURUDEV_SAID: <exact words as quoted in source — "exact wording not available" if not directly quoted>
+TRANSFORMATION: <before state, inner shift, after state as described in source — "none evident" if not present>
 QUOTE_CLIP_POTENTIAL: <High | Medium | Low | Needs Review>
 
 STORY [2]
 ...
 
 If nothing found: NO_STORIES_FOUND`
+
+const BK_VALID_CATEGORIES = new Set([
+  'bk_first_meeting', 'bk_humour', 'bk_one_ajna', 'bk_the_object', 'bk_discipline_training',
+  'bk_dasha_family', 'bk_non_jain', 'bk_he_found_me_first', 'bk_he_doesnt_see_time',
+  'bk_vision_behind_projects', 'bk_compassion_seva', 'bk_children_teaching',
+  'bk_satsang_transformation', 'bk_love_for_pkd', 'bk_letters_mails', 'bk_night_satsang',
+  'bk_question_answer', 'bk_closing_accounts', 'bk_same_incident_diff_ajna',
+  'bk_gurudev_as_child', 'bk_meditation_inner_state', 'bk_study_group',
+  'bk_line_that_changed_me', 'bk_shared_events',
+])
 
 interface ParsedBKStory {
   story_id: string
@@ -267,22 +216,25 @@ interface ParsedBKStory {
   time_life_stage: string
   location: string
   person: string
+  other_people: string[]
   tags: string[]
   summary: string
   what_happened: string
   what_gurudev_said: string
   transformation: string
   quote_clip_potential: string
-  category: string
+  categories: string[]
   source_type: 'bapa_katha'
 }
 
-function parseBKResponse(text: string, category: string): ParsedBKStory[] {
+function parseBKResponse(text: string): ParsedBKStory[] {
   if (!text || text.includes('NO_STORIES_FOUND')) return []
   const blocks = text.split(/STORY\s*\[\d+\]/i).slice(1)
   return blocks.flatMap(block => {
     const title = fieldValue(block, 'STORY_TITLE')
     if (!title) return []
+    const rawCats = parseList(fieldValue(block, 'CATEGORIES'))
+    const categories = rawCats.filter(c => BK_VALID_CATEGORIES.has(c))
     const story: ParsedBKStory = {
       story_id:          fieldValue(block, 'STORY_ID'),
       story_title:       title,
@@ -290,13 +242,14 @@ function parseBKResponse(text: string, category: string): ParsedBKStory[] {
       time_life_stage:   fieldValue(block, 'TIME_LIFE_STAGE') || 'not specified',
       location:          fieldValue(block, 'LOCATION') || 'not specified',
       person:            fieldValue(block, 'PERSON') || 'not specified',
+      other_people:      parseList(fieldValue(block, 'OTHER_PEOPLE')),
       tags:              parseList(fieldValue(block, 'TAGS')),
       summary:           fieldValue(block, 'SUMMARY'),
       what_happened:     fieldValue(block, 'WHAT_HAPPENED'),
       what_gurudev_said: fieldValue(block, 'WHAT_GURUDEV_SAID') || 'exact wording not available',
       transformation:    fieldValue(block, 'TRANSFORMATION') || 'none evident',
       quote_clip_potential: fieldValue(block, 'QUOTE_CLIP_POTENTIAL') || 'Needs Review',
-      category,
+      categories,
       source_type: 'bapa_katha',
     }
     return [story]
@@ -331,6 +284,48 @@ function askNotebook(notebookId: string, prompt: string): Promise<AskResponse> {
   })
 }
 
+function listSources(notebookId: string): Promise<{ id: string; title: string }[]> {
+  return new Promise((resolve, reject) => {
+    const proc = spawn(PYTHON, [SOURCES_SCRIPT, notebookId], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: process.env,
+    })
+    let stdout = ''
+    proc.stdout.on('data', (d: Buffer) => { stdout += d.toString() })
+    proc.on('close', () => {
+      try {
+        const r = JSON.parse(stdout.trim())
+        if (r.error) reject(new Error(r.error))
+        else resolve(r as { id: string; title: string }[])
+      } catch {
+        reject(new Error('Invalid response from nlm_sources.py'))
+      }
+    })
+    proc.on('error', reject)
+  })
+}
+
+function askSource(notebookId: string, sourceId: string, prompt: string): Promise<AskResponse> {
+  return new Promise((resolve, reject) => {
+    const proc = spawn(PYTHON, [ASK_SOURCE_SCRIPT, notebookId, sourceId, prompt], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: process.env,
+    })
+    let stdout = ''
+    proc.stdout.on('data', (d: Buffer) => { stdout += d.toString() })
+    proc.on('close', () => {
+      try {
+        const r = JSON.parse(stdout.trim())
+        if (r.error) reject(new Error(r.error))
+        else resolve({ answer: r.answer || '', references: r.references || [] })
+      } catch {
+        reject(new Error('Invalid response from nlm_ask_source.py'))
+      }
+    })
+    proc.on('error', reject)
+  })
+}
+
 function evt(data: object): string {
   return `data: ${JSON.stringify(data)}\n\n`
 }
@@ -345,29 +340,26 @@ export async function POST(req: NextRequest) {
       const enc = new TextEncoder()
       const send = (data: object) => controller.enqueue(enc.encode(evt(data)))
 
-      const total = notebook_ids.length * categories.length
+      const bkIds = new Set(bapa_katha_ids as string[])
+      const standardNbs = (notebook_ids as string[]).filter(id => !bkIds.has(id))
+      const bkNbs       = (notebook_ids as string[]).filter(id => bkIds.has(id))
+      const total = standardNbs.length * (categories as string[]).length + bkNbs.length
       let done = 0
 
       try {
         const db = await getDb()
 
-        for (const nbId of notebook_ids as string[]) {
-          const isBK = (bapa_katha_ids as string[]).includes(nbId)
+        // ── Standard notebooks: one query per category ───────────────────────
+        for (const nbId of standardNbs) {
           const nbTitle: string = (notebook_titles as Record<string, string>)[nbId] || nbId.slice(0, 8)
-
-          send({ msg: `━━ Notebook: ${nbTitle}${isBK ? ' [Bapa Katha]' : ''}`, level: 'info' })
+          send({ msg: `━━ Notebook: ${nbTitle}`, level: 'info' })
 
           for (const cat of categories as string[]) {
             if (done > 0) await new Promise(r => setTimeout(r, 15000))
             send({ msg: `  Querying [${cat}]…`, level: 'info' })
 
             try {
-              let prompt: string
-              if (isBK) {
-                prompt = (BK_PROMPTS[cat] || `${BK_BASE}\n\nExtract all ${cat.replace('bk_', '')} stories.`) + BK_GENERAL_SUFFIX
-              } else {
-                prompt = (PROMPTS[cat] || `Extract all ${cat} incidents.`) + PROMPT_SUFFIX
-              }
+              const prompt = (PROMPTS[cat] || `Extract all ${cat} incidents.`) + PROMPT_SUFFIX
 
               let askResult: AskResponse
               try {
@@ -383,8 +375,6 @@ export async function POST(req: NextRequest) {
               }
               const { answer, references } = askResult
               const now = new Date()
-
-              // Build source links from references: { source_id → nlm_url }
               const nlmSourceLinks = references
                 .filter(r => r.source_id)
                 .map(r => ({
@@ -393,61 +383,31 @@ export async function POST(req: NextRequest) {
                   nlm_url: `https://notebooklm.google.com/notebook/${nbId}?source=${r.source_id}`,
                 }))
 
-              if (isBK) {
-                const stories = parseBKResponse(answer, cat)
-                if (stories.length === 0) {
-                  send({ msg: `  → No stories found`, level: 'muted' })
-                } else {
-                  let saved = 0, skipped = 0
-                  for (const story of stories) {
-                    const hash = contentHash(nbId, cat, story.story_title + story.what_happened.slice(0, 80))
-                    const result = await db.collection(COLLECTIONS.bk_stories).updateOne(
-                      { contentHash: hash },
-                      { $setOnInsert: { ...story, contentHash: hash, extracted_at: now, source_notebook: nbId, source_notebook_title: nbTitle, nlm_source_links: nlmSourceLinks } },
-                      { upsert: true }
-                    )
-                    if (result.upsertedCount > 0) saved++
-                    else skipped++
-                  }
-                  const msg = skipped > 0
-                    ? `  ✓ ${saved} new stor${saved !== 1 ? 'ies' : 'y'} saved · ${skipped} already existed`
-                    : `  ✓ ${saved} stor${saved !== 1 ? 'ies' : 'y'} saved`
-                  send({ msg: saved > 0 ? msg : `  → No new stories — all ${skipped} already extracted`, level: saved > 0 ? 'success' : 'muted' })
-                  if (saved > 0) {
-                    await db.collection(COLLECTIONS.extractions).insertOne({
-                      notebook_id: nbId, category: cat, notebook_type: 'bapa_katha',
-                      points_saved: saved, points_skipped: skipped,
-                      status: 'done', started_at: now,
-                    })
-                  }
-                }
+              const incidents = parseResponse(answer, cat)
+              if (incidents.length === 0) {
+                send({ msg: `  → No points found`, level: 'muted' })
               } else {
-                const incidents = parseResponse(answer, cat)
-                if (incidents.length === 0) {
-                  send({ msg: `  → No points found`, level: 'muted' })
-                } else {
-                  let saved = 0, skipped = 0
-                  for (const inc of incidents) {
-                    const hash = contentHash(nbId, cat, inc.description)
-                    const result = await db.collection(COLLECTIONS.incidents).updateOne(
-                      { contentHash: hash },
-                      { $setOnInsert: { ...inc, contentHash: hash, extracted_at: now, source_notebook: nbId, source_notebook_title: nbTitle, source_type: 'notebooklm', nlm_source_links: nlmSourceLinks } },
-                      { upsert: true }
-                    )
-                    if (result.upsertedCount > 0) saved++
-                    else skipped++
-                  }
-                  const msg = skipped > 0
-                    ? `  ✓ ${saved} new point(s) saved · ${skipped} already existed`
-                    : `  ✓ ${saved} point(s) saved`
-                  send({ msg: saved > 0 ? msg : `  → No new points — all ${skipped} already extracted`, level: saved > 0 ? 'success' : 'muted' })
-                  if (saved > 0) {
-                    await db.collection(COLLECTIONS.extractions).insertOne({
-                      notebook_id: nbId, category: cat,
-                      points_saved: saved, points_skipped: skipped,
-                      status: 'done', started_at: now,
-                    })
-                  }
+                let saved = 0, skipped = 0
+                for (const inc of incidents) {
+                  const hash = contentHash(nbId, cat, inc.description)
+                  const result = await db.collection(COLLECTIONS.incidents).updateOne(
+                    { contentHash: hash },
+                    { $setOnInsert: { ...inc, contentHash: hash, extracted_at: now, source_notebook: nbId, source_notebook_title: nbTitle, source_type: 'notebooklm', nlm_source_links: nlmSourceLinks } },
+                    { upsert: true }
+                  )
+                  if (result.upsertedCount > 0) saved++
+                  else skipped++
+                }
+                const msg = skipped > 0
+                  ? `  ✓ ${saved} new point(s) saved · ${skipped} already existed`
+                  : `  ✓ ${saved} point(s) saved`
+                send({ msg: saved > 0 ? msg : `  → No new points — all ${skipped} already extracted`, level: saved > 0 ? 'success' : 'muted' })
+                if (saved > 0) {
+                  await db.collection(COLLECTIONS.extractions).insertOne({
+                    notebook_id: nbId, category: cat,
+                    points_saved: saved, points_skipped: skipped,
+                    status: 'done', started_at: now,
+                  })
                 }
               }
             } catch (e) {
@@ -457,6 +417,100 @@ export async function POST(req: NextRequest) {
             done++
             send({ progress: done, total })
           }
+        }
+
+        // ── Bapa Katha notebooks: one query per source ───────────────────────
+        for (const nbId of bkNbs) {
+          const nbTitle: string = (notebook_titles as Record<string, string>)[nbId] || nbId.slice(0, 8)
+          send({ msg: `━━ Notebook: ${nbTitle} [Bapa Katha]`, level: 'info' })
+
+          // List sources first
+          let sources: { id: string; title: string }[] = []
+          try {
+            sources = await listSources(nbId)
+            send({ msg: `  Found ${sources.length} source${sources.length !== 1 ? 's' : ''} — querying each…`, level: 'info' })
+          } catch (e) {
+            send({ msg: `  ✗ Could not list sources: ${e}`, level: 'error' })
+            done++
+            send({ progress: done, total })
+            continue
+          }
+
+          // Update total now that we know the real source count
+          // (we reserved 1 slot for this notebook; expand to actual source count)
+          const extraSlots = sources.length - 1
+          // send updated total so progress bar stays accurate
+          send({ totalDelta: extraSlots })
+
+          let nbSaved = 0, nbSkipped = 0
+
+          for (let si = 0; si < sources.length; si++) {
+            const src = sources[si]
+            if (done > 0 || si > 0) await new Promise(r => setTimeout(r, 15000))
+            send({ msg: `  [${si + 1}/${sources.length}] ${src.title || src.id}…`, level: 'info' })
+
+            try {
+              let askResult: AskResponse
+              try {
+                askResult = await askSource(nbId, src.id, BK_ALL_PROMPT)
+              } catch (retryErr: any) {
+                if (/rate limit|rejected/i.test(String(retryErr))) {
+                  send({ msg: `  ⏳ Rate limited — waiting 30s before retry…`, level: 'muted' })
+                  await new Promise(r => setTimeout(r, 30000))
+                  askResult = await askSource(nbId, src.id, BK_ALL_PROMPT)
+                } else {
+                  throw retryErr
+                }
+              }
+              const { answer, references } = askResult
+              const now = new Date()
+              const nlmSourceLinks = references
+                .filter(r => r.source_id)
+                .map(r => ({
+                  source_id: r.source_id,
+                  cited_text: r.cited_text,
+                  nlm_url: `https://notebooklm.google.com/notebook/${nbId}?source=${r.source_id}`,
+                }))
+
+              const stories = parseBKResponse(answer)
+              if (stories.length === 0) {
+                send({ msg: `    → No stories found`, level: 'muted' })
+              } else {
+                let saved = 0, skipped = 0
+                for (const story of stories) {
+                  const hash = contentHash(nbId, src.id, story.story_title + story.what_happened.slice(0, 80))
+                  const result = await db.collection(COLLECTIONS.bk_stories).updateOne(
+                    { contentHash: hash },
+                    { $setOnInsert: { ...story, contentHash: hash, extracted_at: now, source_notebook: nbId, source_notebook_title: nbTitle, source_id: src.id, source_title: src.title, nlm_source_links: nlmSourceLinks } },
+                    { upsert: true }
+                  )
+                  if (result.upsertedCount > 0) saved++
+                  else skipped++
+                }
+                nbSaved += saved
+                nbSkipped += skipped
+                const msg = skipped > 0
+                  ? `    ✓ ${saved} new · ${skipped} existed`
+                  : `    ✓ ${saved} stor${saved !== 1 ? 'ies' : 'y'} saved`
+                send({ msg: saved > 0 ? msg : `    → All ${skipped} already extracted`, level: saved > 0 ? 'success' : 'muted' })
+              }
+            } catch (e) {
+              send({ msg: `    ✗ ${e}`, level: 'error' })
+            }
+
+            done++
+            send({ progress: done, total })
+          }
+
+          if (nbSaved > 0) {
+            await db.collection(COLLECTIONS.extractions).insertOne({
+              notebook_id: nbId, notebook_type: 'bapa_katha',
+              points_saved: nbSaved, points_skipped: nbSkipped,
+              status: 'done', started_at: new Date(),
+            })
+          }
+
+          send({ msg: `  ━ Done: ${nbSaved} new stories across ${sources.length} sources`, level: 'success' })
         }
       } catch (e) {
         send({ msg: `Fatal: ${e}`, level: 'error' })

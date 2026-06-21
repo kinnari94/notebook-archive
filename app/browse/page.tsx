@@ -122,7 +122,10 @@ export default function Browse() {
   // Category counts from loaded data
   const categoryStats = useMemo(() => {
     const stats: Record<string, number> = {}
-    allIncidents.forEach(inc => { if (inc.category) stats[inc.category] = (stats[inc.category] || 0) + 1 })
+    allIncidents.forEach(inc => {
+      const cats: string[] = inc.categories?.length ? inc.categories : inc.category ? [inc.category] : []
+      cats.forEach((c: string) => { stats[c] = (stats[c] || 0) + 1 })
+    })
     return stats
   }, [allIncidents])
 
@@ -408,7 +411,7 @@ export default function Browse() {
               <div className={layoutMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 gap-6' : 'space-y-4'}>
                 {visibleIncidents.map((inc: any) =>
                   inc.source_type === 'bapa_katha'
-                    ? <BKStoryCard key={inc._id} story={inc} layout={layoutMode} highlightQuery={searchKeyword} />
+                    ? <BKStoryCard key={inc._id} story={inc} layout={layoutMode} highlightQuery={searchKeyword} activeCategoryFilter={selectedCategory || undefined} />
                     : <IncidentCard key={inc._id} incident={inc} layout={layoutMode} highlightQuery={searchKeyword} />
                 )}
               </div>

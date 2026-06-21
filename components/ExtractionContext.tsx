@@ -61,6 +61,14 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
             if (ev.progress !== undefined) {
               setState(p => ({ ...p, progress: { done: ev.progress, total: ev.total } }))
             }
+            if (ev.totalDelta !== undefined) {
+              setState(p => ({
+                ...p,
+                progress: p.progress
+                  ? { ...p.progress, total: p.progress.total + ev.totalDelta }
+                  : null,
+              }))
+            }
           } catch { /* skip */ }
         }
       }

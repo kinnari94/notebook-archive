@@ -17,7 +17,7 @@ export async function getDb(): Promise<Db> {
     db.collection('incidents').createIndex({ people: 1 }).catch(() => {})
     db.collection('incidents').createIndex({ locations: 1 }).catch(() => {})
     db.collection('incidents').createIndex({ 'date.year': 1 }).catch(() => {})
-    db.collection('bk_stories').createIndex({ category: 1 }).catch(() => {})
+    db.collection('bk_stories').createIndex({ categories: 1 }).catch(() => {})
     db.collection('bk_stories').createIndex({ person: 1 }).catch(() => {})
     db.collection('bk_stories').createIndex({ location: 1 }).catch(() => {})
     db.collection('bk_stories').createIndex({ extracted_at: -1 }).catch(() => {})
@@ -135,7 +135,7 @@ export async function queryIncidents(q: IncidentQuery) {
 
   // Build filter for bk_stories collection
   const bkFilter: Record<string, unknown> = {}
-  if (q.category?.startsWith('bk_')) bkFilter.category = q.category
+  if (q.category?.startsWith('bk_')) bkFilter.categories = q.category
   if (q.person) {
     bkFilter.$or = [
       { person:       { $regex: q.person, $options: 'i' } },
@@ -209,43 +209,37 @@ export async function getIncidentById(id: string) {
   }
 }
 
-export async function getAllPeople(limit = 200) {
-  const db = await getDb()
-  try {
-    const [incPeople, bkPeople] = await Promise.all([
-      db.collection(COLLECTIONS.incidents).distinct('people'),
-      db.collection(COLLECTIONS.bk_stories).distinct('person'),
-    ])
-    const flat: string[] = []
-    for (const item of [...incPeople, ...bkPeople]) {
-      if (Array.isArray(item)) flat.push(...item.filter((s: unknown) => typeof s === 'string' && s.trim() && s.trim() !== 'not specified'))
-      else if (typeof item === 'string' && item.trim() && item.trim() !== 'not specified') flat.push(item.trim())
+function flattenDistinct(items: unknown[]): string[] {
+  const out: string[] = []
+  for (const item of items) {
+    const vals = Array.isArray(item) ? item : [item]
+    for (const v of vals) {
+      if (typeof v === 'string' && v.trim() && v.trim().toLowerCase() !== 'not specified')
+        out.push(v.trim())
     }
-    return [...new Set(flat)].sort().slice(0, limit)
-  } catch (e) {
-    console.error('getAllPeople error:', e)
-    return []
   }
+  return out
 }
 
+export async function getAllPeople(limit = 200) {
+  const db = await getDb()
+  const [incPeople, bkPerson, bkOtherPeople] = await Promise.all([
+    db.collection(COLLECTIONS.incidents).distinct('people'),
+    db.collection(COLLECTIONS.bk_stories).distinct('person'),
+    db.collection(COLLECTIONS.bk_stories).distinct('other_people'),
+  ])
+  const flat = flattenDistinct([...incPeople, ...bkPerson, ...bkOtherPeople])
+  return [...new Set(flat)].sort().slice(0, limit)
+}
 
 export async function getAllLocations(limit = 200) {
   const db = await getDb()
-  try {
-    const [incLocations, bkLocations] = await Promise.all([
-      db.collection(COLLECTIONS.incidents).distinct('locations'),
-      db.collection(COLLECTIONS.bk_stories).distinct('location'),
-    ])
-    const flat: string[] = []
-    for (const item of [...incLocations, ...bkLocations]) {
-      if (Array.isArray(item)) flat.push(...item.filter((s: unknown) => typeof s === 'string' && s.trim() && s.trim() !== 'not specified'))
-      else if (typeof item === 'string' && item.trim() && item.trim() !== 'not specified') flat.push(item.trim())
-    }
-    return [...new Set(flat)].sort().slice(0, limit)
-  } catch (e) {
-    console.error('getAllLocations error:', e)
-    return []
-  }
+  const [incLocations, bkLocation] = await Promise.all([
+    db.collection(COLLECTIONS.incidents).distinct('locations'),
+    db.collection(COLLECTIONS.bk_stories).distinct('location'),
+  ])
+  const flat = flattenDistinct([...incLocations, ...bkLocation])
+  return [...new Set(flat)].sort().slice(0, limit)
 }
 
 export async function getTimelineData(source: 'standard' | 'bapa_katha' | 'all' = 'all') {
@@ -282,10 +276,11 @@ export async function getTimelineData(source: 'standard' | 'bapa_katha' | 'all' 
       if (!year) continue
       if (!byYear[year]) byYear[year] = { count: 0, cats: new Set(), items: [] }
       byYear[year].count++
-      byYear[year].cats.add((doc.category as string) || 'bk_line_that_changed_me')
+      const docCats = (doc.categories as string[]) || []
+      docCats.forEach(c => byYear[year].cats.add(c))
       byYear[year].items.push({
         desc: (doc.summary as string) || (doc.story_title as string),
-        cat: doc.category,
+        cat: docCats[0] || 'bapa_katha',
         id: doc._id.toString(),
         source_type: 'bapa_katha',
       })
