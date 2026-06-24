@@ -20,33 +20,6 @@ const CATEGORIES = [
   { key: 'artifacts',               label: 'Artifacts',             icon: '📿' },
 ]
 
-const BK_CATEGORIES = [
-  { key: 'bk_line_that_changed_me',   label: 'The Line That Changed Me',         icon: '💬' },
-  { key: 'bk_shared_events',          label: 'Shared Events',                    icon: '🤝' },
-  { key: 'bk_first_meeting',          label: 'First Meeting',                    icon: '🌅' },
-  { key: 'bk_humour',                 label: 'Humorous Prasangs',                icon: '😄' },
-  { key: 'bk_one_ajna',               label: 'One Ajna / Guidance',              icon: '🧭' },
-  { key: 'bk_the_object',             label: 'The Object',                       icon: '📿' },
-  { key: 'bk_discipline_training',    label: 'Discipline / Training',            icon: '⚖️' },
-  { key: 'bk_dasha_family',           label: 'Dasha / Family Observations',      icon: '✨' },
-  { key: 'bk_non_jain',               label: "Non-Jain in Bapa's Circle",        icon: '🌍' },
-  { key: 'bk_he_found_me_first',      label: 'He Found Me First',                icon: '🔍' },
-  { key: 'bk_he_doesnt_see_time',     label: "He Doesn't See Time",              icon: '🌙' },
-  { key: 'bk_vision_behind_projects', label: 'Vision Behind Projects',           icon: '🏛️' },
-  { key: 'bk_compassion_seva',        label: 'Compassion / Seva',                icon: '🌱' },
-  { key: 'bk_children_teaching',      label: 'Children / Teaching Through Play', icon: '👶' },
-  { key: 'bk_satsang_transformation', label: 'Satsang / Transformation',         icon: '📖' },
-  { key: 'bk_love_for_pkd',           label: 'Love for PKD / Bhakti',            icon: '🙏' },
-  { key: 'bk_letters_mails',          label: 'Letters / Mails',                  icon: '✉️' },
-  { key: 'bk_night_satsang',          label: 'Night Satsang',                    icon: '🌙' },
-  { key: 'bk_question_answer',        label: 'Question & Answer',                icon: '❓' },
-  { key: 'bk_closing_accounts',       label: 'Closing Accounts',                 icon: '🔐' },
-  { key: 'bk_same_incident_diff_ajna',label: 'Same Incident, Different Ajna',    icon: '🔀' },
-  { key: 'bk_gurudev_as_child',       label: 'Gurudev as a Child',               icon: '🧒' },
-  { key: 'bk_meditation_inner_state', label: 'Meditation & Inner State',         icon: '🧘' },
-  { key: 'bk_study_group',            label: 'Study Group',                      icon: '📚' },
-]
-
 function isBKNotebook(title: string): boolean {
   return /bapa\s*katha/i.test(title)
 }
@@ -72,7 +45,6 @@ export default function Extract() {
   })
   const hasBK       = bkIds.length > 0
   const hasStandard = selectedNbs.length > bkIds.length
-  const activeCats  = hasBK ? BK_CATEGORIES : CATEGORIES
 
   useEffect(() => {
     logsRef.current?.scrollTo({ top: logsRef.current.scrollHeight, behavior: 'smooth' })
@@ -99,7 +71,8 @@ export default function Extract() {
   }, [])
 
   function runExtraction() {
-    if (!selectedNbs.length || !selectedCats.length) return
+    if (!selectedNbs.length) return
+    if (hasStandard && !selectedCats.length) return
     start({
       notebook_ids: selectedNbs,
       categories:   selectedCats,
@@ -119,6 +92,8 @@ export default function Extract() {
   const logColor: Record<string, string> = {
     info: 'text-green-300', error: 'text-red-400', success: 'text-mint', muted: 'text-gray-500',
   }
+
+  const bkOnly = hasBK && !hasStandard
 
   return (
     <div className="p-8">
@@ -176,7 +151,7 @@ export default function Extract() {
             </div>
           )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          <div className={`grid grid-cols-1 ${bkOnly ? '' : 'lg:grid-cols-2'} gap-6 mb-6`}>
             {/* Notebooks */}
             <div className="bg-white border border-border rounded-2xl p-6">
               <h2 className="font-serif text-lg font-bold text-ink mb-4">① Select Notebooks</h2>
@@ -213,56 +188,55 @@ export default function Extract() {
               )}
               {hasStandard && hasBK && (
                 <p className="text-xs text-amber-600 mt-3 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                  Mixed selection: Bapa Katha categories will apply to BK notebooks; standard categories to others.
+                  Mixed selection: standard categories apply to regular notebooks; BK prompt applies to Bapa Katha notebooks.
                 </p>
               )}
             </div>
 
-            {/* Categories */}
-            <div className="bg-white border border-border rounded-2xl p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div>
+            {/* Categories — only shown for standard notebooks */}
+            {!bkOnly && (
+              <div className="bg-white border border-border rounded-2xl p-6">
+                <div className="flex items-center justify-between mb-4">
                   <h2 className="font-serif text-lg font-bold text-ink">② Categories</h2>
-                  {hasBK && <p className="text-xs text-amber-700 mt-0.5">Bapa Katha mode</p>}
+                  <div className="flex gap-2">
+                    <button onClick={() => setSelectedCats(CATEGORIES.map(c => c.key))}
+                      className="text-xs px-2.5 py-1 bg-cream border border-border rounded-lg hover:bg-border">All</button>
+                    <button onClick={() => setSelectedCats([])}
+                      className="text-xs px-2.5 py-1 bg-cream border border-border rounded-lg hover:bg-border">Clear</button>
+                  </div>
                 </div>
-                <div className="flex gap-2">
-                  <button onClick={() => setSelectedCats(activeCats.map(c => c.key))}
-                    className="text-xs px-2.5 py-1 bg-cream border border-border rounded-lg hover:bg-border">All</button>
-                  <button onClick={() => setSelectedCats([])}
-                    className="text-xs px-2.5 py-1 bg-cream border border-border rounded-lg hover:bg-border">Clear</button>
+                <div className="grid grid-cols-2 gap-2">
+                  {CATEGORIES.map(({ key, label, icon }) => (
+                    <button key={key} onClick={() => toggleCat(key)}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-left transition-all ${
+                        selectedCats.includes(key)
+                          ? 'border-ember bg-ember/10 text-ember font-medium'
+                          : 'border-border bg-cream text-ink hover:border-ember/50'
+                      }`}>
+                      <span>{icon}</span>
+                      <span className="truncate text-xs">{label}</span>
+                    </button>
+                  ))}
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                {activeCats.map(({ key, label, icon }) => (
-                  <button key={key} onClick={() => toggleCat(key)}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-left transition-all ${
-                      selectedCats.includes(key)
-                        ? hasBK ? 'border-amber-500 bg-amber-50 text-amber-800 font-medium' : 'border-ember bg-ember/10 text-ember font-medium'
-                        : 'border-border bg-cream text-ink hover:border-ember/50'
-                    }`}>
-                    <span>{icon}</span>
-                    <span className="truncate text-xs">{label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
+            )}
           </div>
 
           {/* Run */}
           <div className="bg-white border border-border rounded-2xl p-6 mb-6">
-            <h2 className="font-serif text-lg font-bold text-ink mb-4">③ Run</h2>
+            <h2 className="font-serif text-lg font-bold text-ink mb-4">{bkOnly ? '②' : '③'} Run</h2>
             <div className="flex flex-wrap items-center gap-6">
               <button onClick={runExtraction}
-                disabled={running || !selectedNbs.length || !selectedCats.length}
+                disabled={running || !selectedNbs.length || (hasStandard && !selectedCats.length)}
                 className="ml-auto flex items-center gap-2 px-7 py-3 bg-ember text-white rounded-2xl font-semibold text-sm hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
                 {running ? <><RefreshCw className="w-4 h-4 animate-spin" />Running…</> : <><Play className="w-4 h-4" />Run Extraction</>}
               </button>
             </div>
-            {(selectedNbs.length > 0 || selectedCats.length > 0) && (
+            {selectedNbs.length > 0 && (
               <p className="text-xs text-muted mt-3">
-                {hasStandard && <>{selectedNbs.length - bkIds.length} standard notebook{selectedNbs.length - bkIds.length !== 1 ? 's' : ''} × {selectedCats.length} categor{selectedCats.length !== 1 ? 'ies' : 'y'}</>}
+                {hasStandard && <>{selectedNbs.length - bkIds.length} standard notebook{selectedNbs.length - bkIds.length !== 1 ? 's' : ''}{selectedCats.length > 0 ? ` × ${selectedCats.length} categor${selectedCats.length !== 1 ? 'ies' : 'y'}` : ''}</>}
                 {hasStandard && hasBK && <span className="mx-1">·</span>}
-                {hasBK && <>{bkIds.length} Bapa Katha notebook{bkIds.length !== 1 ? 's' : ''} — 1 query per source (count known after start)</>}
+                {hasBK && <>{bkIds.length} Bapa Katha notebook{bkIds.length !== 1 ? 's' : ''} — 1 query per source</>}
               </p>
             )}
           </div>
