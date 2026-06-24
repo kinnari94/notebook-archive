@@ -1,32 +1,44 @@
 'use client'
 import { useState } from 'react'
-import { Check, Copy, MapPin, User } from 'lucide-react'
+import { Check, Copy, MapPin, User, BookOpen } from 'lucide-react'
 
+// Accent colors drawn from the provided spectrum palette (crimson → red → coral →
+// orange → amber → golden → olive → green → mint → teal → blue → purple)
 const BK_CATEGORY_COLORS: Record<string, { label: string; icon: string; accent: string }> = {
-  bk_line_that_changed_me:  { label: 'The Line That Changed Me',         icon: '💬', accent: '#92400E' },
-  bk_shared_events:         { label: 'Shared Events',                    icon: '🤝', accent: '#1D4ED8' },
-  bk_first_meeting:         { label: 'First Meeting',                    icon: '🌅', accent: '#BE185D' },
-  bk_humour:                { label: 'Humorous Prasangs',                icon: '😄', accent: '#B45309' },
-  bk_one_ajna:              { label: 'One Ajna / Guidance',              icon: '🧭', accent: '#4338CA' },
-  bk_the_object:            { label: 'The Object',                       icon: '📿', accent: '#57534E' },
-  bk_discipline_training:   { label: 'Discipline / Training',            icon: '⚖️', accent: '#B91C1C' },
-  bk_dasha_family:          { label: 'Dasha / Family Observations',      icon: '✨', accent: '#6D28D9' },
-  bk_non_jain:              { label: "Non-Jain in Bapa's Circle",        icon: '🌍', accent: '#0F766E' },
-  bk_he_found_me_first:     { label: 'He Found Me First',                icon: '🔍', accent: '#065F46' },
-  bk_he_doesnt_see_time:    { label: "He Doesn't See Time",              icon: '🌙', accent: '#0E7490' },
-  bk_vision_behind_projects:{ label: 'Vision Behind Projects',           icon: '🏛️', accent: '#7C3AED' },
-  bk_compassion_seva:       { label: 'Compassion / Seva',                icon: '🌱', accent: '#15803D' },
-  bk_children_teaching:     { label: 'Children / Teaching Through Play', icon: '👶', accent: '#BE185D' },
-  bk_satsang_transformation:{ label: 'Satsang / Transformation',         icon: '📖', accent: '#A21CAF' },
-  bk_love_for_pkd:          { label: 'Love for PKD / Bhakti',            icon: '🙏', accent: '#C2410C' },
-  bk_letters_mails:         { label: 'Letters / Mails',                  icon: '✉️', accent: '#0369A1' },
-  bk_night_satsang:         { label: 'Night Satsang',                    icon: '🌙', accent: '#1E3A5F' },
-  bk_question_answer:       { label: 'Question & Answer',                icon: '❓', accent: '#5B21B6' },
-  bk_closing_accounts:      { label: 'Closing Accounts',                 icon: '🔐', accent: '#374151' },
-  bk_same_incident_diff_ajna:{ label: 'Same Incident, Different Ajna',   icon: '🔀', accent: '#9D174D' },
-  bk_gurudev_as_child:      { label: 'Gurudev as a Child',               icon: '🧒', accent: '#92400E' },
-  bk_meditation_inner_state:{ label: 'Meditation & Inner State',         icon: '🧘', accent: '#065F46' },
-  bk_study_group:           { label: 'Study Group',                      icon: '📚', accent: '#1D4ED8' },
+  bk_line_that_changed_me:   { label: 'The Line That Changed Me',         icon: '💬', accent: '#F08030' }, // orange
+  bk_shared_events:          { label: 'Shared Events',                    icon: '🤝', accent: '#2868C0' }, // blue
+  bk_first_meeting:          { label: 'First Meeting',                    icon: '🌅', accent: '#D82030' }, // red
+  bk_humour:                 { label: 'Humorous Prasangs',                icon: '😄', accent: '#f040be' }, // warm amber
+  bk_one_ajna:               { label: 'One Ajna / Guidance',              icon: '🧭', accent: '#5848A0' }, // purple
+  bk_the_object:             { label: 'The Object',                       icon: '📿', accent: '#F0A040' }, // warm amber
+  bk_discipline_training:    { label: 'Discipline / Training',            icon: '⚖️', accent: '#A01828' }, // dark crimson
+  bk_dasha_family:           { label: 'Dasha / Family Observations',      icon: '✨', accent: '#5848A0' }, // purple
+  bk_non_jain:               { label: "Non-Jain in Bapa's Circle",        icon: '🌍', accent: '#50A870' }, // green
+  bk_he_found_me_first:      { label: 'He Found Me First',                icon: '🔍', accent: '#488020' }, // deep green
+  bk_he_doesnt_see_time:     { label: "He Doesn't See Time",              icon: '🌙', accent: '#2898A8' }, // teal
+  bk_vision_behind_projects: { label: 'Vision Behind Projects',           icon: '🏛️', accent: '#2868C0' }, // blue
+  bk_compassion_seva:        { label: 'Compassion / Seva',                icon: '🌱', accent: '#98a850' }, // green
+  bk_children_teaching:      { label: 'Children / Teaching Through Play', icon: '👶', accent: '#E05028' }, // coral
+  bk_satsang_transformation: { label: 'Satsang / Transformation',         icon: '📖', accent: '#608800' }, // olive
+  bk_love_for_pkd:           { label: 'Love for PKD / Bhakti',            icon: '🙏', accent: '#D82030' }, // red
+  bk_letters_mails:          { label: 'Letters / Mails',                  icon: '✉️', accent: '#2898A8' }, // teal
+  bk_night_satsang:          { label: 'Night Satsang',                    icon: '🌙', accent: '#2868C0' }, // blue
+  bk_question_answer:        { label: 'Question & Answer',                icon: '❓', accent: '#A09000' }, // golden
+  bk_closing_accounts:       { label: 'Closing Accounts',                 icon: '🔐', accent: '#A01828' }, // dark crimson
+  bk_same_incident_diff_ajna:{ label: 'Same Incident, Different Ajna',    icon: '🔀', accent: '#E05028' }, // coral
+  bk_gurudev_as_child:       { label: 'Gurudev as a Child',               icon: '🧒', accent: '#f030e6' }, // orange
+  bk_meditation_inner_state: { label: 'Meditation & Inner State',         icon: '🧘', accent: '#2898A8' }, // teal
+  bk_study_group:            { label: 'Study Group',                      icon: '📚', accent: '#608800' }, // olive
+}
+
+const EMPTY_SENTINELS = new Set([
+  'not specified', 'exact wording not available', 'none evident', 'none', 'n/a', 'unknown',
+])
+
+function hasValue(val: string | null | undefined): val is string {
+  if (!val) return false
+  const t = val.trim().toLowerCase()
+  return t !== '' && !EMPTY_SENTINELS.has(t)
 }
 
 function HighlightText({ text, highlight }: { text: string; highlight?: string }) {
@@ -76,30 +88,37 @@ interface Props {
 
 export default function BKStoryCard({ story, layout = 'grid', highlightQuery = '', activeCategoryFilter }: Props) {
   const [isCopied, setIsCopied] = useState(false)
-  const [isBodyExpanded, setIsBodyExpanded] = useState(false)
+  const [bodyExpanded, setBodyExpanded] = useState(false)
 
-  const allCats = (story.categories?.length ? story.categories : story.category ? [story.category] : [])
-  // When filtered by a category, show only that pill; otherwise show all
-  const cats = activeCategoryFilter && allCats.includes(activeCategoryFilter)
-    ? [activeCategoryFilter]
-    : allCats
-  const catMetas = cats.map(c => BK_CATEGORY_COLORS[c] ?? {
-    label: c.replace(/^bk_/, '').replace(/_/g, ' '),
-    icon: '📖',
-    accent: '#92400E',
-  })
-  // Primary meta drives the accent glow and location/person chip colours
-  const meta = catMetas[0] ?? { label: 'Bapa Katha', icon: '📖', accent: '#92400E' }
+  const allCats = story.categories?.length ? story.categories : story.category ? [story.category] : []
+  const primaryCat = activeCategoryFilter && allCats.includes(activeCategoryFilter)
+    ? activeCategoryFilter
+    : allCats[0]
+
+  const meta: { label: string; icon: string; accent: string } =
+    (primaryCat && BK_CATEGORY_COLORS[primaryCat])
+      ? BK_CATEGORY_COLORS[primaryCat]
+      : {
+          label: primaryCat?.replace(/^bk_/, '').replace(/_/g, ' ') ?? 'Bapa Katha',
+          icon: '📖',
+          accent: '#92400E',
+        }
+
+  // All category metas — primary drives the stripe, all are shown as badges
+  const catMetas = allCats.map(c =>
+    BK_CATEGORY_COLORS[c] ?? {
+      label: c.replace(/^bk_/, '').replace(/_/g, ' '),
+      icon: '📖',
+      accent: '#92400E',
+    }
+  )
 
   const allPeople = [
     ...(story.people ?? (story.person && story.person !== 'not specified' ? [story.person] : [])),
     ...(story.other_people ?? []),
   ].filter((p, i, a) => p && p !== 'not specified' && a.indexOf(p) === i)
 
-  const displayId = story.story_id ? `#${story.story_id}` : 'REF-' + story._id.slice(-6).toUpperCase()
   const body = story.what_happened || story.summary || ''
-  const hasGurudevWords = story.what_gurudev_said && story.what_gurudev_said !== 'exact wording not available'
-  const hasTransformation = story.transformation && story.transformation !== 'none evident'
   const copyText = [story.story_title, body].filter(Boolean).join('\n\n')
 
   const handleCopy = (e: React.MouseEvent) => {
@@ -109,71 +128,104 @@ export default function BKStoryCard({ story, layout = 'grid', highlightQuery = '
     setTimeout(() => setIsCopied(false), 2000)
   }
 
+  const hasLocation = hasValue(story.location)
+  const displayPeople = allPeople
+
   // ── LIST layout ──────────────────────────────────────────────────────────
   if (layout === 'list') {
     return (
-      <div className="group relative bg-[#FDFBF9] border border-[#E9E4DF] rounded-[14px] p-4 transition-all duration-150 flex flex-col md:flex-row md:items-center gap-4 hover:bg-[#FAF6F1] hover:border-[#D6CEC5]">
-        <div className="shrink-0 md:w-24 select-none">
-          {story.time_life_stage && story.time_life_stage !== 'not specified'
-            ? <span className="font-sans font-semibold text-xs text-[#564940] bg-[#F5EFEB] px-2.5 py-1 rounded-full border border-[#E6DAD1]">{story.time_life_stage}</span>
-            : <span className="font-sans text-[11px] font-medium text-[#A6978C] bg-[#FAF7F2] px-2.5 py-1 rounded-full border border-[#E9E1D8]">Bapa Katha</span>
-          }
-        </div>
+      <div className="group flex items-start gap-0 bg-white border border-[#E9E4DF] rounded-2xl overflow-hidden hover:border-[#D0C8C0] hover:shadow-sm hover:-translate-y-0.5 transition-all duration-200" style={{ '--accent': meta.accent } as React.CSSProperties}>
+        {/* Left accent stripe — widens + brightens on hover */}
+        <div className="w-1 group-hover:w-1.5 self-stretch shrink-0 transition-all duration-200" style={{ backgroundColor: meta.accent }} />
 
-        <div className="flex-1 min-w-0">
-          <div className="flex flex-wrap items-center gap-1.5 mb-1.5 select-none">
+        <div className="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-start gap-3 px-4 py-3.5">
+          {/* Category pills — all categories */}
+          <div className="flex flex-wrap gap-1 shrink-0 self-start">
             {catMetas.map((m, i) => (
-              <span key={i} className="inline-flex items-center gap-1 text-[10px] font-sans font-semibold px-2 py-0.5 rounded-full border"
-                style={{ backgroundColor: m.accent + '10', color: m.accent, borderColor: m.accent + '22' }}>
-                <span>{m.icon}</span>
-                <span>{m.label}</span>
+              <span key={i}
+                className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-0.5 rounded-full border"
+                style={{ backgroundColor: m.accent + '12', color: m.accent, borderColor: m.accent + '28' }}
+              >
+                <span className="text-[10px]">{m.icon}</span>
+                <span className="truncate max-w-[130px]">{m.label}</span>
               </span>
             ))}
-            <span className="text-[#C4B5AD] text-[10px] font-mono ml-1">{displayId}</span>
           </div>
-          {story.story_title && (
-            <p className="font-sans text-[#2C2117] text-[14.5px] leading-relaxed font-light tracking-wide mb-1">
-              <HighlightText text={story.story_title} highlight={highlightQuery} />
-            </p>
-          )}
-          {body && (
-            <div className="pl-3 border-l-2 border-[#D4C3B5]">
-              <p className="text-[#645A51] text-[12.5px] leading-relaxed italic font-sans font-light">
-                "<HighlightText text={body} highlight={highlightQuery} />"
+
+          {/* Title + body */}
+          <div className="flex-1 min-w-0">
+            {story.story_title && (
+              <p className="text-[13.5px] font-semibold text-[#1C2018] leading-snug truncate">
+                <HighlightText text={story.story_title} highlight={highlightQuery} />
               </p>
-            </div>
-          )}
-          {(story.location && story.location !== 'not specified') || allPeople.length > 0 ? (
-            <div className="mt-1.5 flex flex-wrap items-center gap-2">
-              {story.location && story.location !== 'not specified' && (
-                <span className="inline-flex items-center gap-1 text-[10px] font-mono text-stone-500">
-                  <MapPin className="w-2.5 h-2.5" />{story.location}
+            )}
+            {body && (
+              <p className="text-[12px] text-stone-400 leading-relaxed mt-0.5 italic">
+                <HighlightText text={body} highlight={highlightQuery} />
+              </p>
+            )}
+            {hasValue(story.what_gurudev_said) && (
+              <div className="mt-2 px-2.5 py-2 rounded-lg border" style={{ backgroundColor: meta.accent + '08', borderColor: meta.accent + '25' }}>
+
+                <p className="text-[11px] leading-relaxed font-medium" style={{ color: meta.accent + 'cc' }}>
+                  <HighlightText text={story.what_gurudev_said} highlight={highlightQuery} />
+                </p>
+              </div>
+            )}
+            {hasValue(story.transformation) && (
+              <div className="mt-2 px-2.5 py-2 rounded-lg bg-amber-50 border border-amber-100">
+                <p className="text-[10px] font-semibold text-amber-600 uppercase tracking-wide mb-0.5">Transformation</p>
+                <p className="text-[11px] text-amber-800 leading-relaxed">
+                  <HighlightText text={story.transformation} highlight={highlightQuery} />
+                </p>
+              </div>
+            )}
+            {story.tags && story.tags.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-2">
+                {story.tags.map((tag, i) => (
+                  <span key={i} className="text-[10px] text-stone-400 bg-stone-50 border border-stone-100 px-1.5 py-0.5 rounded-full">
+                    #{tag}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Meta + actions */}
+          <div className="flex flex-col items-end gap-1.5 shrink-0 text-[11px] text-stone-400">
+            <div className="flex items-center gap-3">
+              {hasValue(story.time_life_stage) && (
+                <span className="hidden md:inline font-mono text-[10px] bg-stone-50 border border-stone-200 px-2 py-0.5 rounded-full text-stone-500">
+                  {story.time_life_stage}
                 </span>
               )}
-              {allPeople.map((p, i) => (
-                <span key={i} className="inline-flex items-center gap-1 text-[10px] font-mono text-sky-600">
-                  <User className="w-2.5 h-2.5" />{p}
+              {hasLocation && (
+                <span className="hidden sm:flex items-center gap-1">
+                  <MapPin className="w-3 h-3" />{story.location}
                 </span>
-              ))}
+              )}
+              {displayPeople[0] && (
+                <span className="hidden sm:flex items-center gap-1">
+                  <User className="w-3 h-3" />{displayPeople[0]}
+                </span>
+              )}
+              <button onClick={handleCopy} className="hover:text-stone-600 transition-colors">
+                {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+              </button>
+              {story.nlm_source_links?.[0] && (
+                <a href={story.nlm_source_links[0].nlm_url} target="_blank" rel="noopener noreferrer"
+                  className="font-medium hover:underline" style={{ color: meta.accent }}>
+                  ↗
+                </a>
+              )}
             </div>
-          ) : null}
-        </div>
-
-        <div className="flex items-center gap-3 text-[11px] font-sans font-medium shrink-0 select-none">
-          {story.source_notebook_title && (
-            <span className="text-[10px] font-mono text-[#A1958C] truncate max-w-[100px]" title={story.source_notebook_title}>
-              📓 {story.source_notebook_title}
-            </span>
-          )}
-          <button onClick={handleCopy} className="text-[#645A51] hover:text-[#2C2117] transition-colors cursor-pointer">
-            {isCopied ? '[copied ✓]' : '[copy]'}
-          </button>
-          {story.nlm_source_links?.[0] && (
-            <a href={story.nlm_source_links[0].nlm_url} target="_blank" rel="noopener noreferrer"
-              className="text-[#794E2C] hover:text-[#533013] hover:underline transition-colors">
-              source ↗
-            </a>
-          )}
+            {story.source_notebook_title && (
+              <div className="flex items-center gap-1 text-[10px] italic text-stone-400">
+                <BookOpen className="w-3 h-3 shrink-0" />
+                <span>{story.source_notebook_title}</span>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     )
@@ -181,130 +233,146 @@ export default function BKStoryCard({ story, layout = 'grid', highlightQuery = '
 
   // ── GRID layout ──────────────────────────────────────────────────────────
   return (
-    <div className="group relative bg-[#FDFBF9] border border-[#E9E4DF] rounded-[24px] p-6 transition-all duration-300 hover:bg-[#FAF6F1] flex flex-col justify-between h-full hover:shadow-[0_12px_36px_rgba(118,91,73,0.06)] hover:border-[#D6CEC5] hover:-translate-y-1 overflow-hidden">
-      {/* Accent glow — always driven by primary category */}
-      <div className="absolute top-0 right-0 w-36 h-36 blur-[48px] opacity-[0.05] group-hover:opacity-[0.10] transition-opacity duration-300 rounded-full pointer-events-none" style={{ backgroundColor: meta.accent }} />
+    <div className="group relative flex h-full bg-white border border-[#E9E4DF] rounded-2xl overflow-hidden hover:border-[#D0C8C0] hover:-translate-y-0.5 transition-all duration-200"
+      style={{ boxShadow: '0 1px 2px rgba(0,0,0,0.03), 0 2px 8px rgba(0,0,0,0.03)' }}
+      onMouseEnter={e => (e.currentTarget.style.boxShadow = `0 10px 28px ${meta.accent}1A, 0 2px 8px rgba(0,0,0,0.04)`)}
+      onMouseLeave={e => (e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.03), 0 2px 8px rgba(0,0,0,0.03)')}
+    >
+      {/* Accent glow overlay */}
+      <div className="absolute top-0 right-0 w-40 h-40 blur-[56px] opacity-0 group-hover:opacity-80 transition-opacity duration-300 pointer-events-none"
+        style={{ background: `radial-gradient(circle, ${meta.accent}22 0%, transparent 70%)` }} />
+      {/* Left accent stripe — widens on hover */}
+      <div className="w-1.5 shrink-0" style={{ backgroundColor: meta.accent }} />
 
-      <div>
-        {/* Header — accent dot + time stage + ref id */}
-        <div className="flex items-center justify-between gap-2 mb-4 pb-2 border-b border-[#F2ECE6]">
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: meta.accent }} />
-            {story.time_life_stage && story.time_life_stage !== 'not specified'
-              ? <span className="text-[11px] font-sans font-semibold px-2 py-0.5 rounded-full border"
-                  style={{ backgroundColor: meta.accent + '12', color: meta.accent, borderColor: meta.accent + '30' }}>
-                  {story.time_life_stage}
-                </span>
-              : <span className="text-[11px] font-mono text-[#B8A99E]">Bapa Katha</span>
-            }
+      <div className="flex-1 flex flex-col px-3.5 pt-3 pb-3 min-w-0">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-1.5 mb-2">
+          <div className="flex flex-wrap gap-1">
+            {catMetas.map((m, i) => (
+              <span key={i}
+                className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border leading-none"
+                style={{ backgroundColor: m.accent + '12', color: m.accent, borderColor: m.accent + '28' }}
+              >
+                <span className="text-[9px]">{m.icon}</span>
+                <span>{m.label}</span>
+              </span>
+            ))}
           </div>
-          <span className="text-[10px] font-mono text-[#C4B5AD] shrink-0">{displayId}</span>
+          {hasValue(story.time_life_stage) && (
+            <span className="text-[9px] font-mono text-stone-400 shrink-0 mt-0.5 bg-stone-50 border border-stone-100 px-1.5 py-0.5 rounded-full">
+              {story.time_life_stage}
+            </span>
+          )}
         </div>
 
-        {/* Story title */}
+        {/* Title */}
         {story.story_title && (
-          <div className="mb-4">
-            <p className="font-sans text-[#2C2117] text-[15px] leading-snug antialiased font-medium tracking-tight">
-              <HighlightText text={story.story_title} highlight={highlightQuery} />
-            </p>
-          </div>
+          <p className="text-sm font-semibold text-stone-800 leading-snug mb-1.5">
+            <HighlightText text={story.story_title} highlight={highlightQuery} />
+          </p>
         )}
 
         {/* Body */}
         {body && (
-          <div className="mb-4 pl-3 border-l-2" style={{ borderColor: meta.accent + '50' }}>
-            <p className={`font-sans font-light text-[#645A51] text-[13px] leading-relaxed italic ${!isBodyExpanded ? 'line-clamp-2' : ''}`}>
-              "<HighlightText text={body} highlight={highlightQuery} />"
+          <div>
+            <p className={`text-xs text-stone-600 leading-relaxed ${bodyExpanded ? '' : 'line-clamp-3'}`}>
+              <HighlightText text={body} highlight={highlightQuery} />
             </p>
-            {body.length > 90 && (
-              <button onClick={e => { e.stopPropagation(); setIsBodyExpanded(v => !v) }}
-                className="mt-1 text-[11px] font-semibold transition-colors hover:underline"
-                style={{ color: meta.accent }}>
-                {isBodyExpanded ? 'Collapse' : 'Show Full Story'}
+            {body.length > 180 && (
+              <button
+                onClick={e => { e.stopPropagation(); setBodyExpanded(v => !v) }}
+                className="mt-0.5 text-[10px] font-medium hover:underline"
+                style={{ color: meta.accent }}
+              >
+                {bodyExpanded ? 'Show Less' : 'Show Full Story'}
               </button>
             )}
           </div>
         )}
 
-        {/* Gurudev's words */}
-        {hasGurudevWords && (
-          <div className="mb-4 pl-3 border-l-2 border-[#C4A882] bg-[#FBF7F2] py-1.5 rounded-r-lg">
-            <p className="font-sans font-normal text-[#3D2B1A] text-[13px] leading-relaxed italic">
-              "{story.what_gurudev_said}"
+        {/* What Gurudev Said */}
+        {hasValue(story.what_gurudev_said) && (
+          <div className="mt-2 pl-2.5 border-l-2" style={{ borderColor: meta.accent + '80' }}>
+            <p className="text-xs leading-relaxed font-medium italic" style={{ color: meta.accent }}>
+              <HighlightText text={story.what_gurudev_said} highlight={highlightQuery} />
             </p>
           </div>
         )}
 
         {/* Transformation */}
-        {hasTransformation && (
-          <div className="mb-4 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2 text-[12px] text-emerald-800">
-            <span className="font-bold">Transformation: </span>{story.transformation}
-          </div>
-        )}
-      </div>
-
-      <div className="space-y-3">
-        {/* Category chips — icon + short label, all categories shown here */}
-        {catMetas.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
-            {catMetas.map((m, i) => (
-              <span key={i} className="inline-flex items-center gap-1 text-[10px] font-sans font-semibold px-2 py-0.5 rounded-full border"
-                style={{ backgroundColor: m.accent + '10', color: m.accent, borderColor: m.accent + '22' }}>
-                <span>{m.icon}</span>
-                <span>{m.label}</span>
-              </span>
-            ))}
+        {hasValue(story.transformation) && (
+          <div className="mt-1.5 px-2.5 py-2 rounded-lg bg-amber-50 border border-amber-100">
+            <p className="text-[10px] font-semibold text-amber-700 uppercase tracking-wider mb-0.5">Transformation</p>
+            <p className="text-xs text-amber-900 leading-relaxed">
+              <HighlightText text={story.transformation} highlight={highlightQuery} />
+            </p>
           </div>
         )}
 
         {/* Tags */}
         {story.tags && story.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1">
+          <div className="flex flex-wrap gap-1 mt-2">
             {story.tags.map((tag, i) => (
-              <span key={i} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-stone-100 text-stone-400 border border-stone-200/60">
+              <span key={i} className="text-[10px] text-stone-400 bg-stone-50 border border-stone-100 px-1.5 py-0.5 rounded-full">
                 #{tag}
               </span>
             ))}
           </div>
         )}
 
-        {/* Location + People */}
-        {((story.location && story.location !== 'not specified') || allPeople.length > 0) && (
-          <div className="flex flex-wrap gap-1.5 select-none">
-            {story.location && story.location !== 'not specified' && (
-              <span className="inline-flex items-center gap-1 text-[10px] font-mono font-medium px-2 py-0.5 rounded-full border border-stone-200 bg-stone-50 text-stone-500">
-                <MapPin className="w-2.5 h-2.5" /><HighlightText text={story.location} highlight={highlightQuery} />
-              </span>
-            )}
-            {allPeople.map((p, i) => (
-              <span key={i} className="inline-flex items-center gap-1 text-[10px] font-mono font-medium px-2 py-0.5 rounded-full border bg-sky-50 text-sky-600 border-sky-100">
-                <User className="w-2.5 h-2.5" /><HighlightText text={p} highlight={highlightQuery} />
-              </span>
-            ))}
-          </div>
-        )}
+        <div className="flex-1" />
 
-        {/* Actions */}
-        <div className="flex items-center justify-between gap-2 pt-2 border-t border-[#F2ECE6] text-[11px] font-sans">
-          <button onClick={handleCopy} className="text-[#A1958C] hover:text-[#2C2117] transition-colors flex items-center gap-1 cursor-pointer select-none font-medium">
-            {isCopied
-              ? <><Check className="w-3 h-3 stroke-[2.5]" /> copied</>
-              : <><Copy className="w-3 h-3" /> copy</>
-            }
-          </button>
-          <div className="flex items-center gap-3">
-            {story.source_notebook_title && (
-              <span className="text-[10px] font-mono text-[#C4B5AD] truncate max-w-[120px]" title={story.source_notebook_title}>
-                {story.source_notebook_title}
-              </span>
-            )}
-            {story.nlm_source_links?.[0]
-              ? <a href={story.nlm_source_links[0].nlm_url} target="_blank" rel="noopener noreferrer"
-                  className="font-medium transition-colors hover:underline" style={{ color: meta.accent }}>
-                  source ↗
+        {/* Footer */}
+        <div className="mt-3 pt-2 border-t border-stone-100 flex flex-col gap-1.5">
+          {/* Location + People */}
+          {(hasLocation || displayPeople.length > 0) && (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-stone-500">
+              {hasLocation && (
+                <span className="flex items-center gap-1">
+                  <MapPin className="w-3 h-3 shrink-0" />
+                  <span>{story.location}</span>
+                </span>
+              )}
+              {displayPeople.map((p, i) => (
+                <span key={i} className="flex items-center gap-1">
+                  <User className="w-3 h-3 shrink-0" />
+                  <span>{p}</span>
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Bottom row: copy (left) | notebook + source (right) */}
+          <div className="flex items-center justify-between gap-2 text-xs">
+            <button
+              onClick={handleCopy}
+              className="flex items-center gap-1 text-stone-400 hover:text-stone-600 transition-colors"
+            >
+              {isCopied ? (
+                <><Check className="w-3 h-3 text-emerald-500" /><span className="text-emerald-500 font-medium">Copied</span></>
+              ) : (
+                <><Copy className="w-3 h-3" /><span>Copy</span></>
+              )}
+            </button>
+            <div className="flex items-center gap-2">
+              {hasValue(story.source_notebook_title) && (
+                <div className="flex items-center gap-1 text-stone-400 text-[11px] italic">
+                  <BookOpen className="w-3 h-3 shrink-0" />
+                  <span>{story.source_notebook_title}</span>
+                </div>
+              )}
+              {story.nlm_source_links?.[0] && (
+                <a
+                  href={story.nlm_source_links[0].nlm_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-semibold hover:underline transition-colors"
+                  style={{ color: meta.accent }}
+                >
+                  Source ↗
                 </a>
-              : <span className="text-[10px] text-[#C4B5AD] font-mono">local.db</span>
-            }
+              )}
+            </div>
           </div>
         </div>
       </div>
