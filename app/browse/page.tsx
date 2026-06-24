@@ -4,42 +4,30 @@ import {
   Search, MapPin, Users, RotateCcw, Compass, X,
   ChevronDown, LayoutGrid, List, ArrowUpDown, Filter, BarChart3,
 } from 'lucide-react'
-import IncidentCard, { CATEGORY_COLORS } from '@/components/IncidentCard'
+import IncidentCard from '@/components/IncidentCard'
 import BKStoryCard from '@/components/BKStoryCard'
 
-// ─── Category meta ────────────────────────────────────────────────────────────
+type Source = 'standard' | 'bapa_katha'
 
-// Standard categories resolved from the shared CATEGORY_COLORS map
-const STANDARD_CATEGORIES = CATEGORY_COLORS
+const COLOR_PALETTE = [
+  '#92400E','#1D4ED8','#BE185D','#B45309','#4338CA','#0F766E',
+  '#B91C1C','#6D28D9','#065F46','#0E7490','#7C3AED','#15803D',
+  '#C2410C','#A21CAF','#0369A1','#1E3A5F','#5B21B6','#374151',
+  '#9D174D','#1C3D27','#78350F','#1e40af','#166534','#7e22ce',
+]
 
-const BK_CATEGORIES: Record<string, { label: string; accent: string }> = {
-  bk_line_that_changed_me:  { label: 'The Line That Changed Me',         accent: '#92400E' },
-  bk_shared_events:         { label: 'Shared Events',                    accent: '#1D4ED8' },
-  bk_first_meeting:         { label: 'First Meeting',                    accent: '#BE185D' },
-  bk_humour:                { label: 'Humorous Prasangs',                accent: '#B45309' },
-  bk_one_ajna:              { label: 'One Ajna / Guidance',              accent: '#4338CA' },
-  bk_the_object:            { label: 'The Object',                       accent: '#57534E' },
-  bk_discipline_training:   { label: 'Discipline / Training',            accent: '#B91C1C' },
-  bk_dasha_family:          { label: 'Dasha / Family Observations',      accent: '#6D28D9' },
-  bk_non_jain:              { label: "Non-Jain in Bapa's Circle",        accent: '#0F766E' },
-  bk_he_found_me_first:     { label: 'He Found Me First',                accent: '#065F46' },
-  bk_he_doesnt_see_time:    { label: "He Doesn't See Time",              accent: '#0E7490' },
-  bk_vision_behind_projects:{ label: 'Vision Behind Projects',           accent: '#7C3AED' },
-  bk_compassion_seva:       { label: 'Compassion / Seva',                accent: '#15803D' },
-  bk_children_teaching:     { label: 'Children / Teaching Through Play', accent: '#BE185D' },
-  bk_satsang_transformation:{ label: 'Satsang / Transformation',         accent: '#A21CAF' },
-  bk_love_for_pkd:          { label: 'Love for PKD / Bhakti',            accent: '#C2410C' },
-  bk_letters_mails:          { label: 'Letters / Mails',                 accent: '#0369A1' },
-  bk_night_satsang:          { label: 'Night Satsang',                   accent: '#1E3A5F' },
-  bk_question_answer:        { label: 'Question & Answer',               accent: '#5B21B6' },
-  bk_closing_accounts:       { label: 'Closing Accounts',                accent: '#374151' },
-  bk_same_incident_diff_ajna:{ label: 'Same Incident, Different Ajna',   accent: '#9D174D' },
-  bk_gurudev_as_child:       { label: 'Gurudev as a Child',              accent: '#92400E' },
-  bk_meditation_inner_state: { label: 'Meditation & Inner State',        accent: '#065F46' },
-  bk_study_group:            { label: 'Study Group',                     accent: '#1D4ED8' },
+function categoryColor(cat: string): string {
+  let h = 0
+  for (let i = 0; i < cat.length; i++) h = cat.charCodeAt(i) + ((h << 5) - h)
+  return COLOR_PALETTE[Math.abs(h) % COLOR_PALETTE.length]
 }
 
-type Source = 'standard' | 'bapa_katha'
+function categoryLabel(cat: string): string {
+  return cat
+    .replace(/^bk_/, '')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, c => c.toUpperCase())
+}
 
 // ─── Browse page ──────────────────────────────────────────────────────────────
 
@@ -62,8 +50,6 @@ export default function Browse() {
   const [selectedTags,    setSelectedTags]    = useState<string[]>([])
   const [tagDropdownOpen, setTagDropdownOpen] = useState(false)
 
-  const activeCategoryMeta = source === 'bapa_katha' ? BK_CATEGORIES : STANDARD_CATEGORIES
-
   const fetchAll = useCallback(async (src: Source, filters: {
     category?: string, person?: string, location?: string,
     yearFrom?: string, yearTo?: string, q?: string
@@ -71,15 +57,29 @@ export default function Browse() {
     setLoading(true)
     setAllIncidents([])
     try {
-      const params = new URLSearchParams({ limit: '200', skip: '0', source: src })
-      if (filters.category) params.set('category', filters.category)
-      if (filters.person)   params.set('person', filters.person)
-      if (filters.location) params.set('location', filters.location)
-      if (filters.yearFrom) params.set('year_from', filters.yearFrom)
-      if (filters.yearTo)   params.set('year_to', filters.yearTo)
-      if (filters.q)        params.set('q', filters.q)
-      const d = await fetch(`/api/incidents?${params}`).then(r => r.json())
-      setAllIncidents(d.incidents || [])
+      const PAGE = 500
+      const buildParams = (skip: number) => {
+        const params = new URLSearchParams({ limit: String(PAGE), skip: String(skip), source: src })
+        if (filters.category) params.set('category', filters.category)
+        if (filters.person)   params.set('person', filters.person)
+        if (filters.location) params.set('location', filters.location)
+        if (filters.yearFrom) params.set('year_from', filters.yearFrom)
+        if (filters.yearTo)   params.set('year_to', filters.yearTo)
+        if (filters.q)        params.set('q', filters.q)
+        return params
+      }
+      const first = await fetch(`/api/incidents?${buildParams(0)}`).then(r => r.json())
+      const collected: any[] = [...(first.incidents || [])]
+      const total: number = first.total ?? collected.length
+      let skip = PAGE
+      while (collected.length < total) {
+        const page = await fetch(`/api/incidents?${buildParams(skip)}`).then(r => r.json())
+        const batch: any[] = page.incidents || []
+        if (batch.length === 0) break
+        collected.push(...batch)
+        skip += PAGE
+      }
+      setAllIncidents(collected)
     } finally {
       setLoading(false)
     }
@@ -88,7 +88,7 @@ export default function Browse() {
   useEffect(() => {
     const t = setTimeout(() => {
       fetchAll(source, {
-        category: selectedCategory,
+        // category intentionally excluded — filtered client-side so counts stay accurate
         person: searchPerson,
         location: searchLocation,
         yearFrom,
@@ -97,7 +97,7 @@ export default function Browse() {
       })
     }, searchKeyword ? 400 : 0)
     return () => clearTimeout(t)
-  }, [source, selectedCategory, searchPerson, searchLocation, yearFrom, yearTo, searchKeyword, fetchAll])
+  }, [source, searchPerson, searchLocation, yearFrom, yearTo, searchKeyword, fetchAll])
 
   useEffect(() => {
     fetch('/api/people').then(r => r.json()).then(d => setPeople(d.people || [])).catch(() => {})
@@ -119,12 +119,12 @@ export default function Browse() {
 
   const handleSourceChange = (s: Source) => { setSource(s); clearFilters() }
 
-  // Category counts from loaded data
+  // Category counts from loaded data — each record counted once (primary category only)
   const categoryStats = useMemo(() => {
     const stats: Record<string, number> = {}
     allIncidents.forEach(inc => {
-      const cats: string[] = inc.categories?.length ? inc.categories : inc.category ? [inc.category] : []
-      cats.forEach((c: string) => { stats[c] = (stats[c] || 0) + 1 })
+      const primary: string | undefined = inc.categories?.[0] ?? inc.category ?? undefined
+      if (primary) stats[primary] = (stats[primary] || 0) + 1
     })
     return stats
   }, [allIncidents])
@@ -134,7 +134,12 @@ export default function Browse() {
   // Client-side filter + sort
   const filteredIncidents = useMemo(() => {
     let result = [...allIncidents]
-    // Tags are client-side only (not in API)
+    if (selectedCategory) {
+      result = result.filter(i => {
+        const primary: string | undefined = i.categories?.[0] ?? i.category ?? undefined
+        return primary === selectedCategory
+      })
+    }
     if (selectedTags.length > 0)
       result = result.filter(i => selectedTags.every(t => i.tags?.includes(t)))
     result.sort((a, b) => {
@@ -142,7 +147,7 @@ export default function Browse() {
       return sortSequence === 'asc' ? ya - yb : yb - ya
     })
     return result
-  }, [allIncidents, sortSequence, selectedTags])
+  }, [allIncidents, sortSequence, selectedTags, selectedCategory])
 
   const visibleIncidents = useMemo(() => filteredIncidents.slice(0, visibleCount), [filteredIncidents, visibleCount])
 
@@ -187,11 +192,10 @@ export default function Browse() {
             All ({allIncidents.length})
           </button>
           {availableCategories.map(cat => {
-            const normCat = cat.toLowerCase().replace(/\s+/g, '_').trim()
-            const meta = activeCategoryMeta[normCat] ?? activeCategoryMeta[cat]
-            const accent = meta?.accent || '#78716c'
-            const label = meta?.label || cat.replace(/_/g, ' ')
+            const accent = categoryColor(cat)
+            const label = categoryLabel(cat)
             const isSelected = selectedCategory === cat
+            const count = categoryStats[cat] || 0
             return (
               <button key={cat} onClick={() => { setSelectedCategory(isSelected ? '' : cat); setVisibleCount(12) }}
                 className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-medium border transition-all uppercase tracking-wider ${
@@ -204,7 +208,7 @@ export default function Browse() {
                 <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: accent }} />
                 {label}
                 <span className={`text-[10px] font-mono px-1 rounded-sm ${isSelected ? 'bg-white/70 text-stone-800' : 'bg-stone-100/70 text-stone-400'}`}>
-                  {categoryStats[cat] || 0}
+                  {count}
                 </span>
               </button>
             )
@@ -331,7 +335,7 @@ export default function Browse() {
               )}
               {selectedCategory && (
                 <span className="inline-flex items-center gap-1 bg-stone-100 text-stone-800 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border border-stone-200">
-                  {(activeCategoryMeta[selectedCategory.toLowerCase().replace(/\s+/g, '_')] ?? activeCategoryMeta[selectedCategory])?.label || selectedCategory.replace(/_/g, ' ')}
+                  {categoryLabel(selectedCategory)}
                   <button onClick={() => setSelectedCategory('')}><X className="w-3 h-3" /></button>
                 </span>
               )}

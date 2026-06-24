@@ -2,23 +2,35 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut } from 'next-auth/react'
-import { LayoutDashboard, BookOpen, Search, Clock, FlaskConical, Settings, Archive, LogOut, Package } from 'lucide-react'
-
+import { LayoutDashboard, BookOpen, Search, Clock, FlaskConical, Settings, Archive, LogOut, Package, Users } from 'lucide-react'
 
 const nav = [
-  { href: '/dashboard',   label: 'Dashboard',   icon: LayoutDashboard },
-  { href: '/browse',      label: 'Browse',       icon: BookOpen },
-  { href: '/search',      label: 'Search',       icon: Search },
-  { href: '/timeline',    label: 'Timeline',     icon: Clock },
-  { href: '/collections', label: 'Collections',  icon: Package },
-  { href: '/extract',     label: 'Extract',      icon: FlaskConical },
-  { href: '/settings',    label: 'Settings',     icon: Settings },
+  { href: '/dashboard',   label: 'Dashboard',   icon: LayoutDashboard, viewKey: 'dashboard' },
+  { href: '/browse',      label: 'Browse',       icon: BookOpen,        viewKey: 'browse' },
+  { href: '/search',      label: 'Search',       icon: Search,          viewKey: 'search' },
+  { href: '/timeline',    label: 'Timeline',     icon: Clock,           viewKey: 'timeline' },
+  { href: '/collections', label: 'Collections',  icon: Package,         viewKey: 'collections' },
+  { href: '/extract',     label: 'Extract',      icon: FlaskConical,    viewKey: 'extract' },
+  { href: '/users',       label: 'Users',        icon: Users,           viewKey: 'users' },
+  { href: '/settings',    label: 'Settings',     icon: Settings,        viewKey: 'settings' },
 ]
 
-interface User { email?: string | null }
+interface User {
+  email?: string | null
+  role?: string | null
+  permissions?: Record<string, string> | null
+}
 
 export default function Sidebar({ user }: { user?: User }) {
   const path = usePathname()
+  const isAdmin = user?.role === 'admin'
+
+  const visibleNav = nav.filter(({ viewKey }) => {
+    if (viewKey === 'users') return isAdmin
+    if (isAdmin) return true
+    // For guests, hide views set to no_access (default to show if no permission record)
+    return user?.permissions?.[viewKey] !== 'no_access'
+  })
 
   return (
     <aside className="fixed left-0 top-0 h-screen w-60 bg-forest flex flex-col z-40">
@@ -37,7 +49,7 @@ export default function Sidebar({ user }: { user?: User }) {
 
       {/* Nav */}
       <nav className="flex-1 px-3 py-5 space-y-1">
-        {nav.map(({ href, label, icon: Icon }) => {
+        {visibleNav.map(({ href, label, icon: Icon }) => {
           const active = path === href || path.startsWith(href + '/')
           return (
             <Link
