@@ -22,19 +22,10 @@ async def main():
         sys.exit(1)
 
     try:
-        async with NotebookLMClient.from_storage() as client:
+        async with await NotebookLMClient.from_storage() as client:
             result = await client.chat.ask(notebook_id, prompt, source_ids=[source_id])
 
-        references = []
-        for ref in result.references:
-            if ref.cited_text:
-                references.append({
-                    "source_id": ref.source_id,
-                    "cited_text": ref.cited_text,
-                    "citation_number": ref.citation_number,
-                })
-
-        print(json.dumps({"answer": result.answer, "references": references}))
+        print(json.dumps({"answer": result.answer, "references": []}))
 
     except FileNotFoundError:
         print(json.dumps({"error": "not_connected"}))

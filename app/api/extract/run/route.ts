@@ -404,7 +404,7 @@ export async function POST(req: NextRequest) {
                 send({ msg: saved > 0 ? msg : `  → No new points — all ${skipped} already extracted`, level: saved > 0 ? 'success' : 'muted' })
                 if (saved > 0) {
                   await db.collection(COLLECTIONS.extractions).insertOne({
-                    notebook_id: nbId, category: cat,
+                    notebook_id: nbId, notebook_title: nbTitle, category: cat,
                     points_saved: saved, points_skipped: skipped,
                     status: 'done', started_at: now,
                   })
@@ -504,7 +504,7 @@ export async function POST(req: NextRequest) {
 
           if (nbSaved > 0) {
             await db.collection(COLLECTIONS.extractions).insertOne({
-              notebook_id: nbId, notebook_type: 'bapa_katha',
+              notebook_id: nbId, notebook_title: nbTitle, notebook_type: 'bapa_katha',
               points_saved: nbSaved, points_skipped: nbSkipped,
               status: 'done', started_at: new Date(),
             })

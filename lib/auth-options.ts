@@ -3,6 +3,7 @@ import type { JWT } from 'next-auth/jwt'
 import type { Session, NextAuthOptions } from 'next-auth'
 import { getDb } from '@/lib/db'
 import { DEFAULT_GUEST_PERMISSIONS } from '@/lib/permissions'
+import { clearNlmSession } from '@/lib/nlm-session'
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -49,6 +50,12 @@ export const authOptions: NextAuthOptions = {
         ;(session.user as any).permissions = (token as any).permissions ?? null
       }
       return session
+    },
+  },
+  events: {
+    async signOut({ token }: { token: JWT }) {
+      const email = (token as any).email
+      if (email) clearNlmSession(email)
     },
   },
 }

@@ -3,7 +3,7 @@ Login to NotebookLM using Google email + password via Playwright.
 Usage: nlm_login_credentials.py <email> <password>
 Prints JSON: {"ok": true} or {"ok": false, "error": "..."}
 """
-import json, sys, time
+import json, sys
 from pathlib import Path
 
 if len(sys.argv) < 3:
@@ -25,6 +25,12 @@ except ImportError:
     print(json.dumps({"ok": False, "error": "Playwright not installed. Run: pip install playwright && playwright install chromium"}))
     sys.exit(1)
 
+UA = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/125.0.0.0 Safari/537.36"
+)
+
 try:
     with sync_playwright() as p:
         context = p.chromium.launch_persistent_context(
@@ -32,52 +38,139 @@ try:
             headless=True,
             args=[
                 "--disable-blink-features=AutomationControlled",
-                "--password-store=basic",
+                "--disable-dev-shm-usage",
                 "--no-sandbox",
+                "--disable-setuid-sandbox",
+                "--disable-infobars",
+                "--window-size=1280,800",
+                "--password-store=basic",
             ],
             ignore_default_args=["--enable-automation"],
+            user_agent=UA,
+            viewport={"width": 1280, "height": 800},
+            locale="en-US",
+            timezone_id="America/New_York",
         )
 
         page = context.new_page()
-        page.goto("https://accounts.google.com/signin/v2/identifier?continue=https://notebooklm.google.com/")
 
-        # Enter email
-        page.wait_for_selector('input[type="email"]', timeout=10000)
-        page.fill('input[type="email"]', email)
-        page.click('#identifierNext, [id="identifierNext"]')
+        # Override navigator.webdriver so Google doesn't flag us
+        page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
 
-        # Enter password
-        page.wait_for_selector('input[type="password"]', timeout=10000)
-        page.fill('input[type="password"]', password)
-        page.click('#passwordNext, [id="passwordNext"]')
+        page.goto(
+            "https://accounts.google.com/signin/v2/identifier"
+            "?continue=https%3A%2F%2Fnotebooklm.google.com%2F"
+            "&hl=en&flowName=GlifWebSignIn&flowEntry=ServiceLogin",
+            wait_until="domcontentloaded",
+            timeout=30000,
+        )
 
-        # Wait to land on NotebookLM
-        try:
-            page.wait_for_url("**/notebooklm.google.com/**", timeout=20000)
-        except Exception:
-            # Check where we ended up
-            url = page.url
-            content = page.content()
-            if "accounts.google.com/signin/v2/challenge" in url or "2-Step" in content:
-                context.close()
-                print(json.dumps({"ok": False, "error": "2-Step Verification required. Disable 2FA or use notebooklm login from terminal."}))
-                sys.exit(1)
-            if "accounts.google.com" in url:
-                context.close()
-                print(json.dumps({"ok": False, "error": "Login failed. Check your email and password."}))
-                sys.exit(1)
-
-        # Verify we're authenticated (page has SNlM0e token)
-        content = page.content()
-        if "SNlM0e" not in content:
+        # If already signed in and redirected to NotebookLM, save state and exit
+        if "notebooklm.google.com" in page.url:
+            context.storage_state(path=str(STORAGE_PATH))
+            STORAGE_PATH.chmod(0o600)
             context.close()
-            print(json.dumps({"ok": False, "error": "Reached NotebookLM but not authenticated. Try again."}))
+            print(json.dumps({"ok": True}))
+            sys.exit(0)
+
+        # Handle "Choose an account" screen (stale session in profile)
+        try:
+            use_another = page.locator("text=Use another account").first
+            if use_another.is_visible(timeout=3000):
+                use_another.click()
+                page.wait_for_load_state("domcontentloaded", timeout=10000)
+        except Exception:
+            pass
+
+        # --- Email step ---
+        email_selectors = [
+            'input[type="email"]',
+            'input[name="identifier"]',
+            '#identifierId',
+        ]
+        email_input = None
+        for sel in email_selectors:
+            try:
+                page.wait_for_selector(sel, state="visible", timeout=15000)
+                email_input = page.locator(sel).first
+                break
+            except Exception:
+                continue
+
+        if email_input is None:
+            context.close()
+            print(json.dumps({"ok": False, "error": f"Could not find email input. Page URL: {page.url}"}))
             sys.exit(1)
 
-        state = context.storage_state(path=str(STORAGE_PATH))
+        email_input.fill(email)
+        page.wait_for_timeout(500)
+
+        # Click Next — try ID then aria-label
+        next_btn = page.locator('#identifierNext button, [data-action="next"] button, #identifierNext').first
+        next_btn.click()
+
+        # --- Password step ---
+        pw_selectors = [
+            'input[type="password"]',
+            'input[name="Passwd"]',
+            'input[name="password"]',
+        ]
+        pw_input = None
+        for sel in pw_selectors:
+            try:
+                page.wait_for_selector(sel, state="visible", timeout=15000)
+                pw_input = page.locator(sel).first
+                break
+            except Exception:
+                continue
+
+        if pw_input is None:
+            context.close()
+            print(json.dumps({"ok": False, "error": f"Could not find password input. Page URL: {page.url}"}))
+            sys.exit(1)
+
+        pw_input.fill(password)
+        page.wait_for_timeout(500)
+
+        pw_next = page.locator('#passwordNext button, [data-action="next"] button, #passwordNext').first
+        pw_next.click()
+
+        # --- Wait for outcome ---
+        try:
+            page.wait_for_url("**/notebooklm.google.com/**", timeout=30000)
+        except Exception:
+            url = page.url
+            content = page.content()
+
+            if any(x in url or x in content for x in [
+                "signin/v2/challenge", "TwoStep", "two-step", "2-Step",
+                "challenge", "totp", "phone",
+            ]):
+                context.close()
+                print(json.dumps({"ok": False, "error": "2-Step Verification required. Please disable 2FA temporarily or use an App Password."}))
+                sys.exit(1)
+
+            if "accounts.google.com" in url:
+                # Could be wrong password or captcha
+                err_text = ""
+                try:
+                    err_el = page.locator('[aria-live="assertive"], .o6cuMc, .dEOOab').first
+                    if err_el.is_visible(timeout=2000):
+                        err_text = err_el.inner_text()
+                except Exception:
+                    pass
+                context.close()
+                msg = f"Login failed: {err_text}" if err_text else "Login failed. Check your email and password."
+                print(json.dumps({"ok": False, "error": msg}))
+                sys.exit(1)
+
+            context.close()
+            print(json.dumps({"ok": False, "error": f"Unexpected redirect to: {url}"}))
+            sys.exit(1)
+
+        context.storage_state(path=str(STORAGE_PATH))
         STORAGE_PATH.chmod(0o600)
         context.close()
-
         print(json.dumps({"ok": True}))
 
 except Exception as e:

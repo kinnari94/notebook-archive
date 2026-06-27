@@ -1,10 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth-options'
 import { getDb } from '@/lib/db'
 import { DEFAULT_GUEST_PERMISSIONS } from '@/lib/permissions'
 
 const COL = 'allowed_users'
+const DENIED = NextResponse.json({ error: 'Access Denied' }, { status: 403 })
+
+async function requireAdmin() {
+  const session = await getServerSession(authOptions)
+  if (!session?.user) return null
+  if ((session.user as any).role !== 'admin') return null
+  return session
+}
 
 export async function GET() {
+  if (!await requireAdmin()) return DENIED
   const db = await getDb()
   const users = await db.collection(COL)
     .find({}, { projection: { _id: 0, email: 1, addedAt: 1, role: 1, permissions: 1 } })
@@ -13,6 +24,7 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  if (!await requireAdmin()) return DENIED
   const { email, role } = await req.json()
   if (!email || !email.includes('@')) return NextResponse.json({ error: 'Invalid email' }, { status: 400 })
   const validRole = role === 'admin' ? 'admin' : 'guest'
@@ -27,6 +39,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
+  if (!await requireAdmin()) return DENIED
   const { email, role, permissions } = await req.json()
   if (!email) return NextResponse.json({ error: 'Missing email' }, { status: 400 })
 
@@ -62,6 +75,7 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  if (!await requireAdmin()) return DENIED
   const { email } = await req.json()
   const db = await getDb()
   await db.collection(COL).deleteOne({ email: email.toLowerCase().trim() })

@@ -1,7 +1,8 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { Search as SearchIcon, ChevronLeft, ChevronRight, BookOpen, Loader2, Sparkles, FileText } from 'lucide-react'
+import { Search as SearchIcon, ChevronLeft, ChevronRight, BookOpen, Loader2, Sparkles, FileText, X } from 'lucide-react'
 import IncidentCard from '@/components/IncidentCard'
+import BKStoryCard from '@/components/BKStoryCard'
 
 const ARCHIVE_EXAMPLES = ['maun vrat', 'flood relief', 'diksha', 'COVID response', 'ashram construction', 'samadhi']
 const NLM_EXAMPLES = ['teachings on meditation', 'humorous moments with Bapaji', 'quotes about surrender', 'guidance on diet and discipline']
@@ -23,7 +24,7 @@ export default function Search() {
   // Archive search state
   const [query, setQuery]       = useState('')
   const [input, setInput]       = useState('')
-  const [results, setResults]   = useState<{ total: number; incidents: unknown[] }>({ total: 0, incidents: [] })
+  const [results, setResults]   = useState<{ total: number; incidents: unknown[]; searchType?: string }>({ total: 0, incidents: [] })
   const [page, setPage]         = useState(0)
   const [loading, setLoading]   = useState(false)
   const [searched, setSearched] = useState(false)
@@ -47,15 +48,23 @@ export default function Search() {
     }
   }, [mode, notebooks.length])
 
-  // Archive search
+  function clearSearch() {
+    setInput(''); setQuery(''); setResults({ total: 0, incidents: [] }); setPage(0); setSearched(false)
+  }
+
+  // Archive search — uses semantic search endpoint, never saves query to backend
   async function doSearch(q: string, p = 0) {
     if (!q.trim()) return
     setLoading(true); setSearched(true)
     try {
       const params = new URLSearchParams({ q, limit: String(PAGE_SIZE), skip: String(p * PAGE_SIZE) })
-      const d = await fetch(`/api/incidents?${params}`).then(r => r.json())
+      const d = await fetch(`/api/semantic-search?${params}`).then(r => r.json())
       setResults(d); setPage(p); setQuery(q)
     } finally { setLoading(false) }
+  }
+
+  function clearNlmSearch() {
+    setNlmInput(''); setNlmQuery(''); setNlmResults([]); setNlmSearched(false)
   }
 
   // NLM search
@@ -104,12 +113,24 @@ export default function Search() {
                 <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
                 <input value={input} onChange={e => setInput(e.target.value)}
                   placeholder="Search incidents, people, places…"
-                  className="w-full pl-11 pr-4 py-3 rounded-2xl border border-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-ember/30 shadow-sm" />
+                  className="w-full pl-11 pr-10 py-3 rounded-2xl border border-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-ember/30 shadow-sm" />
+                {input && (
+                  <button type="button" onClick={() => setInput('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-ink transition-colors">
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
               </div>
               <button type="submit"
                 className="px-6 py-3 bg-ember text-white rounded-2xl text-sm font-semibold hover:bg-orange-600 transition-colors">
                 Search
               </button>
+              {searched && (
+                <button type="button" onClick={clearSearch}
+                  className="px-5 py-3 bg-white border border-border text-ink rounded-2xl text-sm font-semibold hover:bg-cream transition-colors flex items-center gap-2">
+                  <X className="w-4 h-4" /> Clear
+                </button>
+              )}
             </div>
           </form>
 
@@ -133,9 +154,16 @@ export default function Search() {
             </div>
           ) : searched && (
             <>
-              <p className="text-sm text-muted mb-4">
-                {results.total === 0 ? 'No results found' : `${results.total.toLocaleString()} results for "${query}"`}
-              </p>
+              <div className="flex items-center gap-3 mb-4">
+                <p className="text-sm text-muted">
+                  {results.total === 0 ? 'No results found' : `${results.total.toLocaleString()} results for "${query}"`}
+                </p>
+                {results.total > 0 && (
+                  <span className="flex items-center gap-1 px-2 py-0.5 bg-forest/10 text-forest text-xs font-semibold rounded-full">
+                    <Sparkles className="w-3 h-3" /> Semantic Search
+                  </span>
+                )}
+              </div>
               {results.incidents.length === 0 ? (
                 <div className="text-center py-20 text-muted">
                   <p className="text-4xl mb-3">🔍</p>
@@ -145,9 +173,12 @@ export default function Search() {
               ) : (
                 <>
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-                    {results.incidents.map(inc => (
-                      <IncidentCard key={(inc as { _id: string })._id} incident={inc as Parameters<typeof IncidentCard>[0]['incident']} />
-                    ))}
+                    {results.incidents.map(inc => {
+                      const r = inc as { _id: string; source_type?: string }
+                      return r.source_type === 'bapa_katha'
+                        ? <BKStoryCard key={r._id} story={inc as Parameters<typeof BKStoryCard>[0]['story']} highlightQuery={query} />
+                        : <IncidentCard key={r._id} incident={inc as Parameters<typeof IncidentCard>[0]['incident']} highlightQuery={query} />
+                    })}
                   </div>
                   {totalPages > 1 && (
                     <div className="flex items-center justify-center gap-3">
@@ -214,13 +245,25 @@ export default function Search() {
                 <Sparkles className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
                 <input value={nlmInput} onChange={e => setNlmInput(e.target.value)}
                   placeholder="Ask a question or describe what you're looking for…"
-                  className="w-full pl-11 pr-4 py-3 rounded-2xl border border-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-forest/30 shadow-sm" />
+                  className="w-full pl-11 pr-10 py-3 rounded-2xl border border-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-forest/30 shadow-sm" />
+                {nlmInput && (
+                  <button type="button" onClick={() => setNlmInput('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-ink transition-colors">
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
               </div>
               <button type="submit"
                 disabled={!selectedNbs.length || !nlmInput.trim() || nlmLoading}
                 className="px-6 py-3 bg-forest text-white rounded-2xl text-sm font-semibold hover:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
                 {nlmLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Ask'}
               </button>
+              {nlmSearched && (
+                <button type="button" onClick={clearNlmSearch}
+                  className="px-5 py-3 bg-white border border-border text-ink rounded-2xl text-sm font-semibold hover:bg-cream transition-colors flex items-center gap-2">
+                  <X className="w-4 h-4" /> Clear
+                </button>
+              )}
             </div>
             {!selectedNbs.length && <p className="text-xs text-amber-600 mt-2">Select at least one notebook above</p>}
           </form>

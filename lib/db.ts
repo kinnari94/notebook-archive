@@ -56,17 +56,67 @@ export async function getArchiveStats() {
       stats[key] = 0
     }
   }
+
+  // People don't live in the people collection — count distinct names across both incident collections
+  try {
+    const [incPeople, bkPerson, bkOtherPeople] = await Promise.all([
+      db.collection(COLLECTIONS.incidents).distinct('people'),
+      db.collection(COLLECTIONS.bk_stories).distinct('person'),
+      db.collection(COLLECTIONS.bk_stories).distinct('other_people'),
+    ])
+    const flat = flattenDistinct([...incPeople, ...bkPerson, ...bkOtherPeople])
+    stats.people = new Set(flat).size
+  } catch {
+    stats.people = 0
+  }
+
+  // Seva projects live in incidents + bk_stories, not in the seva_projects collection
+  try {
+    const [sevaInc, sevaBk] = await Promise.all([
+      db.collection(COLLECTIONS.incidents).countDocuments({ category: 'seva_projects' }),
+      db.collection(COLLECTIONS.bk_stories).countDocuments({ categories: 'bk_compassion_seva' }),
+    ])
+    stats.seva_projects = sevaInc + sevaBk
+  } catch {
+    stats.seva_projects = 0
+  }
+
+  // Extractions count = total points saved across all jobs (meaningful output metric)
+  try {
+    const result = await db.collection(COLLECTIONS.extractions).aggregate([
+      { $group: { _id: null, total: { $sum: '$points_saved' }, jobs: { $sum: 1 } } },
+    ]).toArray()
+    stats.extractions = result[0]?.total ?? 0
+    stats.extraction_jobs = result[0]?.jobs ?? 0
+  } catch {
+    stats.extractions = 0
+    stats.extraction_jobs = 0
+  }
+
   return stats
 }
 
 export async function getCategoryBreakdown() {
   const db = await getDb()
   try {
-    const result = await db.collection(COLLECTIONS.incidents).aggregate([
-      { $group: { _id: '$category', count: { $sum: 1 } } },
-      { $sort: { count: -1 } },
-    ]).toArray()
-    return result.map(r => ({ category: r._id, count: r.count }))
+    const [incRows, bkRows] = await Promise.all([
+      db.collection(COLLECTIONS.incidents).aggregate([
+        { $group: { _id: '$category', count: { $sum: 1 } } },
+      ]).toArray(),
+      db.collection(COLLECTIONS.bk_stories).aggregate([
+        { $unwind: '$categories' },
+        { $group: { _id: '$categories', count: { $sum: 1 } } },
+      ]).toArray(),
+    ])
+
+    const merged: Record<string, number> = {}
+    for (const r of [...incRows, ...bkRows]) {
+      if (r._id) merged[r._id] = (merged[r._id] || 0) + r.count
+    }
+
+    return Object.entries(merged)
+      .map(([category, count]) => ({ category, count }))
+      .sort((a, b) => b.count - a.count)
   } catch {
     return []
   }
@@ -75,11 +125,22 @@ export async function getCategoryBreakdown() {
 export async function getRecentExtractions(limit = 8) {
   const db = await getDb()
   try {
-    return await db.collection(COLLECTIONS.extractions)
+    const docs = await db.collection(COLLECTIONS.extractions)
       .find({}, { projection: { _id: 0 } })
       .sort({ started_at: -1 })
       .limit(limit)
       .toArray()
+
+    // Backfill notebook_title for old records that predate the title field
+    return await Promise.all(docs.map(async (doc) => {
+      if (doc.notebook_title) return doc
+      const col = doc.notebook_type === 'bapa_katha' ? COLLECTIONS.bk_stories : COLLECTIONS.incidents
+      const sample = await db.collection(col).findOne(
+        { source_notebook: doc.notebook_id },
+        { projection: { source_notebook_title: 1 } }
+      )
+      return { ...doc, notebook_title: sample?.source_notebook_title ?? null }
+    }))
   } catch {
     return []
   }
