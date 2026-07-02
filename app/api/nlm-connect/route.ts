@@ -9,6 +9,8 @@ const PYTHON = process.platform === 'win32' ? 'python' : 'python3'
 const LOGIN_SCRIPT = join(process.cwd(), 'scripts', 'nlm_login_credentials.py')
 const LIST_SCRIPT  = join(process.cwd(), 'scripts', 'nlm_list.py')
 
+const NOT_AVAILABLE = 'NotebookLM features require a server with Python 3 and Playwright installed. They are not available on Vercel or other serverless platforms.'
+
 function runScript(args: string[], timeoutMs: number): Promise<string> {
   return new Promise((resolve, reject) => {
     const proc = spawn(PYTHON, args, {
@@ -25,7 +27,10 @@ function runScript(args: string[], timeoutMs: number): Promise<string> {
       if (stdout.trim()) resolve(stdout.trim())
       else reject(new Error(stderr.trim() || 'No output from script'))
     })
-    proc.on('error', reject)
+    proc.on('error', (err: NodeJS.ErrnoException) => {
+      clearTimeout(timer)
+      reject(new Error(err.code === 'ENOENT' ? NOT_AVAILABLE : err.message))
+    })
   })
 }
 

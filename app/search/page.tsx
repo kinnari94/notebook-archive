@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { Search as SearchIcon, ChevronLeft, ChevronRight, BookOpen, Loader2, Sparkles, FileText, X } from 'lucide-react'
+import { Search as SearchIcon, ChevronLeft, ChevronRight, BookOpen, Loader2, Sparkles, FileText, X, Download } from 'lucide-react'
 import IncidentCard from '@/components/IncidentCard'
 import BKStoryCard from '@/components/BKStoryCard'
 
@@ -26,8 +26,9 @@ export default function Search() {
   const [input, setInput]       = useState('')
   const [results, setResults]   = useState<{ total: number; incidents: unknown[]; searchType?: string }>({ total: 0, incidents: [] })
   const [page, setPage]         = useState(0)
-  const [loading, setLoading]   = useState(false)
-  const [searched, setSearched] = useState(false)
+  const [loading, setLoading]       = useState(false)
+  const [searched, setSearched]     = useState(false)
+  const [downloading, setDownloading] = useState(false)
 
   // NLM search state
   const [nlmInput,       setNlmInput]       = useState('')
@@ -52,6 +53,63 @@ export default function Search() {
     setInput(''); setQuery(''); setResults({ total: 0, incidents: [] }); setPage(0); setSearched(false)
   }
 
+  function csvCell(v: unknown): string {
+    const s = Array.isArray(v) ? v.join('; ') : String(v ?? '')
+    return `"${s.replace(/"/g, '""').replace(/\n/g, ' ')}"`
+  }
+
+  async function downloadCSV() {
+    if (!query.trim() || downloading) return
+    setDownloading(true)
+    try {
+      const params = new URLSearchParams({ q: query, limit: '500', skip: '0' })
+      const d = await fetch(`/api/semantic-search?${params}`).then(r => r.json())
+      const rows: string[][] = []
+      const headers = ['Type', 'ID', 'Date / Period', 'Category', 'Description / Title', 'People', 'Location', 'Source Chunk', 'Notebook']
+      rows.push(headers)
+
+      for (const inc of (d.incidents as Record<string, unknown>[])) {
+        if (inc.source_type === 'bapa_katha') {
+          rows.push([
+            'BK Story',
+            String(inc._id ?? ''),
+            String(inc.time_life_stage ?? (inc.date as Record<string, unknown>)?.['period'] ?? ''),
+            Array.isArray(inc.categories) ? (inc.categories as string[]).join('; ') : String(inc.category ?? ''),
+            String(inc.story_title ?? inc.description ?? ''),
+            [inc.person, ...(Array.isArray(inc.other_people) ? inc.other_people : [])].filter(Boolean).join('; '),
+            String(inc.location ?? (Array.isArray(inc.locations) ? (inc.locations as string[]).join('; ') : '')),
+            String(inc.what_happened ?? inc.summary ?? ''),
+            String(inc.source_notebook_title ?? ''),
+          ].map(csvCell))
+        } else {
+          const d2 = inc.date as Record<string, unknown> | undefined
+          rows.push([
+            'Incident',
+            String(inc._id ?? ''),
+            String(d2?.period ?? d2?.year ?? ''),
+            String(inc.category ?? ''),
+            String(inc.description ?? ''),
+            Array.isArray(inc.people) ? (inc.people as string[]).join('; ') : '',
+            Array.isArray(inc.locations) ? (inc.locations as string[]).join('; ') : '',
+            String(inc.source_chunk ?? ''),
+            String(inc.source_notebook_title ?? ''),
+          ].map(csvCell))
+        }
+      }
+
+      const csv = rows.map(r => r.join(',')).join('\r\n')
+      const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `archive-search-${query.slice(0, 30).replace(/\s+/g, '-')}.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+    } finally {
+      setDownloading(false)
+    }
+  }
+
   // Archive search — uses semantic search endpoint, never saves query to backend
   async function doSearch(q: string, p = 0) {
     if (!q.trim()) return
@@ -65,6 +123,25 @@ export default function Search() {
 
   function clearNlmSearch() {
     setNlmInput(''); setNlmQuery(''); setNlmResults([]); setNlmSearched(false)
+  }
+
+  function downloadNlmCSV() {
+    if (!nlmResults.length) return
+    const headers = ['Notebook', 'Query', 'Answer', 'Source Excerpts']
+    const rows = [headers, ...nlmResults.map(r => [
+      r.notebook_title,
+      nlmQuery,
+      r.error ? `Error: ${r.error}` : (r.answer || 'No content found'),
+      r.references.map(ref => ref.cited_text).join(' | '),
+    ].map(v => `"${String(v ?? '').replace(/"/g, '""').replace(/\n/g, ' ')}"`))]
+    const csv = rows.map(r => r.join(',')).join('\r\n')
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `notebooklm-${nlmQuery.slice(0, 30).replace(/\s+/g, '-')}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   // NLM search
@@ -154,14 +231,21 @@ export default function Search() {
             </div>
           ) : searched && (
             <>
-              <div className="flex items-center gap-3 mb-4">
+              <div className="flex items-center gap-3 mb-4 flex-wrap">
                 <p className="text-sm text-muted">
                   {results.total === 0 ? 'No results found' : `${results.total.toLocaleString()} results for "${query}"`}
                 </p>
                 {results.total > 0 && (
-                  <span className="flex items-center gap-1 px-2 py-0.5 bg-forest/10 text-forest text-xs font-semibold rounded-full">
-                    <Sparkles className="w-3 h-3" /> Semantic Search
-                  </span>
+                  <>
+                    <span className="flex items-center gap-1 px-2 py-0.5 bg-forest/10 text-forest text-xs font-semibold rounded-full">
+                      <Sparkles className="w-3 h-3" /> {results.searchType === 'vector' ? 'Semantic Search' : 'Text Search'}
+                    </span>
+                    <button onClick={downloadCSV} disabled={downloading}
+                      className="ml-auto flex items-center gap-1.5 px-3 py-1.5 bg-white border border-border text-ink rounded-xl text-xs font-semibold hover:bg-cream disabled:opacity-50 transition-colors">
+                      {downloading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                      {downloading ? 'Exporting…' : 'Download CSV'}
+                    </button>
+                  </>
                 )}
               </div>
               {results.incidents.length === 0 ? (
@@ -293,9 +377,17 @@ export default function Search() {
 
           {!nlmLoading && nlmSearched && (
             <>
-              <p className="text-sm text-muted mb-4">
-                Results for <span className="font-semibold text-ink">"{nlmQuery}"</span> across {nlmResults.length} notebook{nlmResults.length !== 1 ? 's' : ''}
-              </p>
+              <div className="flex items-center gap-3 mb-4 flex-wrap">
+                <p className="text-sm text-muted">
+                  Results for <span className="font-semibold text-ink">"{nlmQuery}"</span> across {nlmResults.length} notebook{nlmResults.length !== 1 ? 's' : ''}
+                </p>
+                {nlmResults.some(r => r.answer && !r.error) && (
+                  <button onClick={downloadNlmCSV}
+                    className="ml-auto flex items-center gap-1.5 px-3 py-1.5 bg-white border border-border text-ink rounded-xl text-xs font-semibold hover:bg-cream transition-colors">
+                    <Download className="w-3.5 h-3.5" /> Download CSV
+                  </button>
+                )}
+              </div>
               <div className="space-y-4">
                 {nlmResults.map(r => (
                   <div key={r.notebook_id} className="bg-white border border-border rounded-2xl overflow-hidden">

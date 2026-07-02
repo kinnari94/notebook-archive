@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
+import type { Db } from 'mongodb'
 import { getDb, COLLECTIONS } from '@/lib/db'
+import { getEmbedding } from '@/lib/embeddings'
 
 const PAGE_SIZE = 30
 
@@ -19,9 +21,24 @@ function normalizeBKStory(d: Record<string, unknown>): Record<string, unknown> {
 }
 
 function buildTextFilter(q: string, fields: string[]) {
-  return {
-    $or: fields.map(f => ({ [f]: { $regex: q, $options: 'i' } })),
-  }
+  return { $or: fields.map(f => ({ [f]: { $regex: q, $options: 'i' } })) }
+}
+
+async function doVectorSearch(db: Db, col: string, queryVector: number[], limit: number) {
+  const pipeline = [
+    {
+      $vectorSearch: {
+        index: 'vector_index',
+        path: 'embedding',
+        queryVector,
+        numCandidates: limit * 5,
+        limit,
+      },
+    },
+    { $addFields: { _score: { $meta: 'vectorSearchScore' } } },
+    { $project: { embedding: 0 } },
+  ]
+  return db.collection(col).aggregate(pipeline).toArray() as Promise<Record<string, unknown>[]>
 }
 
 export async function GET(req: NextRequest) {
@@ -34,9 +51,40 @@ export async function GET(req: NextRequest) {
 
   const db = await getDb()
 
-  // Multi-field regex search across both collections (always runs, no data saved)
+  // --- Try vector search if API key is configured ---
+  if (process.env.HUGGINGFACE_API_KEY) {
+    try {
+      const queryVector = await getEmbedding(q)
+
+      const [incRaw, bkRaw] = await Promise.all([
+        doVectorSearch(db, COLLECTIONS.incidents, queryVector, 60),
+        doVectorSearch(db, COLLECTIONS.bk_stories, queryVector, 60),
+      ])
+
+      // Only use vector results if we got something back (embeddings exist)
+      if (incRaw.length > 0 || bkRaw.length > 0) {
+        const incNorm = incRaw.map(d => ({ ...d, _id: String(d._id) }))
+        const bkNorm  = bkRaw.map(d => normalizeBKStory(d))
+
+        const merged = [...incNorm, ...bkNorm].sort((a, b) => {
+          const sa = ((a as Record<string, unknown>)._score as number) ?? 0
+          const sb = ((b as Record<string, unknown>)._score as number) ?? 0
+          return sb - sa
+        })
+
+        const total = merged.length
+        const incidents = merged.slice(skip, skip + limit)
+        return NextResponse.json({ total, incidents, searchType: 'vector' })
+      }
+      // No embeddings in DB yet — fall through to regex
+    } catch {
+      // Vector index not created or model unavailable — fall through to regex
+    }
+  }
+
+  // --- Regex fallback (always works, no setup needed) ---
   const incFilter = buildTextFilter(q, ['description', 'source_chunk', 'people', 'locations', 'category'])
-  const bkFilter = buildTextFilter(q, ['story_title', 'summary', 'what_happened', 'person', 'location'])
+  const bkFilter  = buildTextFilter(q, ['story_title', 'summary', 'what_happened', 'person', 'location'])
 
   try {
     const [incTotal, bkTotal] = await Promise.all([
@@ -44,7 +92,6 @@ export async function GET(req: NextRequest) {
       db.collection(COLLECTIONS.bk_stories).countDocuments(bkFilter),
     ])
     const total = incTotal + bkTotal
-
     const incidents: unknown[] = []
 
     if (skip < incTotal) {

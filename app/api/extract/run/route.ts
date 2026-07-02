@@ -14,6 +14,7 @@ const ASK_SCRIPT        = join(process.cwd(), 'scripts', 'nlm_ask.py')
 const ASK_SOURCE_SCRIPT = join(process.cwd(), 'scripts', 'nlm_ask_source.py')
 const SOURCES_SCRIPT    = join(process.cwd(), 'scripts', 'nlm_sources.py')
 const PYTHON = process.platform === 'win32' ? 'python' : 'python3'
+const PYTHON_UNAVAILABLE = 'NotebookLM features require Python 3 and Playwright. Not available on serverless platforms like Vercel.'
 
 // ─── Standard extraction ────────────────────────────────────────────────────
 
@@ -280,7 +281,9 @@ function askNotebook(notebookId: string, prompt: string): Promise<AskResponse> {
         reject(new Error('Invalid response from nlm_ask.py'))
       }
     })
-    proc.on('error', reject)
+    proc.on('error', (err: NodeJS.ErrnoException) => {
+      reject(new Error(err.code === 'ENOENT' ? PYTHON_UNAVAILABLE : err.message))
+    })
   })
 }
 
@@ -301,7 +304,9 @@ function listSources(notebookId: string): Promise<{ id: string; title: string }[
         reject(new Error('Invalid response from nlm_sources.py'))
       }
     })
-    proc.on('error', reject)
+    proc.on('error', (err: NodeJS.ErrnoException) => {
+      reject(new Error(err.code === 'ENOENT' ? PYTHON_UNAVAILABLE : err.message))
+    })
   })
 }
 
@@ -322,7 +327,9 @@ function askSource(notebookId: string, sourceId: string, prompt: string): Promis
         reject(new Error('Invalid response from nlm_ask_source.py'))
       }
     })
-    proc.on('error', reject)
+    proc.on('error', (err: NodeJS.ErrnoException) => {
+      reject(new Error(err.code === 'ENOENT' ? PYTHON_UNAVAILABLE : err.message))
+    })
   })
 }
 

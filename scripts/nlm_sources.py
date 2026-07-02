@@ -20,7 +20,7 @@ async def main():
         sys.exit(1)
 
     try:
-        async with NotebookLMClient.from_storage() as client:
+        async with await NotebookLMClient.from_storage() as client:
             sources = await client.sources.list(notebook_id)
 
         result = [

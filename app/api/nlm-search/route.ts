@@ -24,7 +24,12 @@ function askNotebook(notebookId: string, prompt: string): Promise<{ answer: stri
         reject(new Error('Invalid response'))
       }
     })
-    proc.on('error', reject)
+    proc.on('error', (err: NodeJS.ErrnoException) => {
+      clearTimeout(timer)
+      reject(new Error(err.code === 'ENOENT'
+        ? 'NotebookLM features require Python 3 and Playwright. Not available on serverless platforms.'
+        : err.message))
+    })
   })
 }
 

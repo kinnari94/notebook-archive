@@ -21,7 +21,12 @@ function runList(): Promise<string> {
       if (stdout.trim()) resolve(stdout.trim())
       else reject(new Error(stderr.trim() || 'no output'))
     })
-    proc.on('error', reject)
+    proc.on('error', (err: NodeJS.ErrnoException) => {
+      clearTimeout(timer)
+      reject(new Error(err.code === 'ENOENT'
+        ? 'NotebookLM features require Python 3 and Playwright. Not available on serverless platforms.'
+        : err.message))
+    })
   })
 }
 
