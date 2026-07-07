@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import {
   Search, MapPin, Users, RotateCcw, Compass, X,
   ChevronDown, LayoutGrid, List, ArrowUpDown, Filter, BarChart3,
@@ -31,12 +31,18 @@ function categoryLabel(cat: string): string {
 
 // ─── Browse page ──────────────────────────────────────────────────────────────
 
+const PAGE = 12
+
 export default function Browse() {
   const [source,          setSource]          = useState<Source>('standard')
   const [allIncidents,    setAllIncidents]    = useState<any[]>([])
+  const [total,           setTotal]           = useState(0)
+  const [allCount,        setAllCount]        = useState(0)
+  const [categoryCounts,  setCategoryCounts]  = useState<{ category: string; count: number }[]>([])
   const [people,          setPeople]          = useState<string[]>([])
   const [locations,       setLocations]       = useState<string[]>([])
   const [loading,         setLoading]         = useState(false)
+  const [loadingMore,     setLoadingMore]     = useState(false)
 
   const [searchKeyword,   setSearchKeyword]   = useState('')
   const [selectedCategory,setSelectedCategory]= useState('')
@@ -46,58 +52,90 @@ export default function Browse() {
   const [yearTo,          setYearTo]          = useState('')
   const [sortSequence,    setSortSequence]    = useState<'asc' | 'desc'>('asc')
   const [layoutMode,      setLayoutMode]      = useState<'grid' | 'list'>('grid')
-  const [visibleCount,    setVisibleCount]    = useState(12)
   const [selectedTags,    setSelectedTags]    = useState<string[]>([])
   const [tagDropdownOpen, setTagDropdownOpen] = useState(false)
 
-  const fetchAll = useCallback(async (src: Source, filters: {
+  type Filters = {
     category?: string, person?: string, location?: string,
-    yearFrom?: string, yearTo?: string, q?: string
-  } = {}) => {
+    yearFrom?: string, yearTo?: string, q?: string, tags?: string[], sort?: 'asc' | 'desc'
+  }
+
+  const buildParams = (src: Source, skip: number, limit: number, filters: Filters) => {
+    const params = new URLSearchParams({ limit: String(limit), skip: String(skip), source: src })
+    if (filters.category) params.set('category', filters.category)
+    if (filters.person)   params.set('person', filters.person)
+    if (filters.location) params.set('location', filters.location)
+    if (filters.yearFrom) params.set('year_from', filters.yearFrom)
+    if (filters.yearTo)   params.set('year_to', filters.yearTo)
+    if (filters.q)        params.set('q', filters.q)
+    if (filters.tags?.length) params.set('tags', filters.tags.join(','))
+    if (filters.sort)     params.set('sort', filters.sort)
+    return params
+  }
+
+  // Guards against a slower, now-stale request resolving after a newer one when filters change quickly.
+  const pageRequestId = useRef(0)
+  const facetRequestId = useRef(0)
+
+  const fetchFirstPage = useCallback(async (src: Source, filters: Filters) => {
+    const requestId = ++pageRequestId.current
     setLoading(true)
-    setAllIncidents([])
     try {
-      const PAGE = 500
-      const buildParams = (skip: number) => {
-        const params = new URLSearchParams({ limit: String(PAGE), skip: String(skip), source: src })
-        if (filters.category) params.set('category', filters.category)
-        if (filters.person)   params.set('person', filters.person)
-        if (filters.location) params.set('location', filters.location)
-        if (filters.yearFrom) params.set('year_from', filters.yearFrom)
-        if (filters.yearTo)   params.set('year_to', filters.yearTo)
-        if (filters.q)        params.set('q', filters.q)
-        return params
-      }
-      const first = await fetch(`/api/incidents?${buildParams(0)}`).then(r => r.json())
-      const collected: any[] = [...(first.incidents || [])]
-      const total: number = first.total ?? collected.length
-      let skip = PAGE
-      while (collected.length < total) {
-        const page = await fetch(`/api/incidents?${buildParams(skip)}`).then(r => r.json())
-        const batch: any[] = page.incidents || []
-        if (batch.length === 0) break
-        collected.push(...batch)
-        skip += PAGE
-      }
-      setAllIncidents(collected)
+      const page = await fetch(`/api/incidents?${buildParams(src, 0, PAGE, filters)}`).then(r => r.json())
+      if (requestId !== pageRequestId.current) return
+      setAllIncidents(page.incidents || [])
+      setTotal(page.total ?? 0)
     } finally {
-      setLoading(false)
+      if (requestId === pageRequestId.current) setLoading(false)
     }
   }, [])
 
+  const fetchCategoryCounts = useCallback(async (src: Source, filters: Omit<Filters, 'category'>) => {
+    const requestId = ++facetRequestId.current
+    try {
+      const params = buildParams(src, 0, 0, filters)
+      params.delete('limit'); params.delete('skip')
+      const res = await fetch(`/api/incidents/categories?${params}`).then(r => r.json())
+      if (requestId !== facetRequestId.current) return
+      setCategoryCounts(res.categories || [])
+      setAllCount(res.total ?? 0)
+    } catch {
+      if (requestId === facetRequestId.current) { setCategoryCounts([]); setAllCount(0) }
+    }
+  }, [])
+
+  const loadMore = useCallback(async () => {
+    setLoadingMore(true)
+    try {
+      const filters: Filters = {
+        category: selectedCategory, person: searchPerson, location: searchLocation,
+        yearFrom, yearTo, q: searchKeyword, tags: selectedTags, sort: sortSequence,
+      }
+      const page = await fetch(`/api/incidents?${buildParams(source, allIncidents.length, PAGE, filters)}`).then(r => r.json())
+      setAllIncidents(prev => [...prev, ...(page.incidents || [])])
+    } finally {
+      setLoadingMore(false)
+    }
+  }, [source, allIncidents.length, selectedCategory, searchPerson, searchLocation, yearFrom, yearTo, searchKeyword, selectedTags, sortSequence])
+
   useEffect(() => {
     const t = setTimeout(() => {
-      fetchAll(source, {
-        // category intentionally excluded — filtered client-side so counts stay accurate
-        person: searchPerson,
-        location: searchLocation,
-        yearFrom,
-        yearTo,
-        q: searchKeyword,
+      fetchFirstPage(source, {
+        category: selectedCategory, person: searchPerson, location: searchLocation,
+        yearFrom, yearTo, q: searchKeyword, tags: selectedTags, sort: sortSequence,
       })
     }, searchKeyword ? 400 : 0)
     return () => clearTimeout(t)
-  }, [source, searchPerson, searchLocation, yearFrom, yearTo, searchKeyword, fetchAll])
+  }, [source, selectedCategory, searchPerson, searchLocation, yearFrom, yearTo, searchKeyword, selectedTags, sortSequence, fetchFirstPage])
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      fetchCategoryCounts(source, {
+        person: searchPerson, location: searchLocation, yearFrom, yearTo, q: searchKeyword, tags: selectedTags,
+      })
+    }, searchKeyword ? 400 : 0)
+    return () => clearTimeout(t)
+  }, [source, searchPerson, searchLocation, yearFrom, yearTo, searchKeyword, selectedTags, fetchCategoryCounts])
 
   useEffect(() => {
     fetch('/api/people').then(r => r.json()).then(d => setPeople(d.people || [])).catch(() => {})
@@ -114,42 +152,23 @@ export default function Browse() {
 
   const clearFilters = () => {
     setSearchKeyword(''); setSelectedCategory(''); setSearchPerson('')
-    setSearchLocation(''); setYearFrom(''); setYearTo(''); setSelectedTags([]); setVisibleCount(12)
+    setSearchLocation(''); setYearFrom(''); setYearTo(''); setSelectedTags([])
   }
 
   const handleSourceChange = (s: Source) => { setSource(s); clearFilters() }
 
-  // Category counts from loaded data — each record counted once (primary category only)
+  // Category counts come from the server (matching all active filters except category
+  // itself), so pills stay accurate without downloading every matching record.
   const categoryStats = useMemo(() => {
     const stats: Record<string, number> = {}
-    allIncidents.forEach(inc => {
-      const primary: string | undefined = inc.categories?.[0] ?? inc.category ?? undefined
-      if (primary) stats[primary] = (stats[primary] || 0) + 1
-    })
+    categoryCounts.forEach(({ category, count }) => { stats[category] = count })
     return stats
-  }, [allIncidents])
+  }, [categoryCounts])
 
   const availableCategories = useMemo(() => Object.keys(categoryStats).sort(), [categoryStats])
 
-  // Client-side filter + sort
-  const filteredIncidents = useMemo(() => {
-    let result = [...allIncidents]
-    if (selectedCategory) {
-      result = result.filter(i => {
-        const primary: string | undefined = i.categories?.[0] ?? i.category ?? undefined
-        return primary === selectedCategory
-      })
-    }
-    if (selectedTags.length > 0)
-      result = result.filter(i => selectedTags.every(t => i.tags?.includes(t)))
-    result.sort((a, b) => {
-      const ya = a.date?.year ?? 9999, yb = b.date?.year ?? 9999
-      return sortSequence === 'asc' ? ya - yb : yb - ya
-    })
-    return result
-  }, [allIncidents, sortSequence, selectedTags, selectedCategory])
-
-  const visibleIncidents = useMemo(() => filteredIncidents.slice(0, visibleCount), [filteredIncidents, visibleCount])
+  // Filtering, sorting, and pagination all happen server-side now — render what was loaded.
+  const visibleIncidents = allIncidents
 
   const hasActiveFilters = selectedCategory || searchKeyword || searchPerson || searchLocation || yearFrom || yearTo || selectedTags.length > 0
 
@@ -185,11 +204,11 @@ export default function Browse() {
           <span>CATEGORY</span>
         </div>
         <div className="flex flex-wrap items-center gap-2 p-3 bg-[#eae4da]/15 rounded-xl border border-[#eae4da]/50">
-          <button onClick={() => { setSelectedCategory(''); setVisibleCount(12) }}
+          <button onClick={() => setSelectedCategory('')}
             className={`px-3.5 py-1 rounded-full text-[11px] font-semibold border transition-all uppercase tracking-wider ${
               selectedCategory === '' ? 'bg-[#564940] text-white border-[#564940]' : 'bg-white text-stone-600 hover:bg-[#FAF6F1] border-[#E9E4DF]'
             }`}>
-            All ({allIncidents.length})
+            All ({allCount})
           </button>
           {availableCategories.map(cat => {
             const accent = categoryColor(cat)
@@ -197,7 +216,7 @@ export default function Browse() {
             const isSelected = selectedCategory === cat
             const count = categoryStats[cat] || 0
             return (
-              <button key={cat} onClick={() => { setSelectedCategory(isSelected ? '' : cat); setVisibleCount(12) }}
+              <button key={cat} onClick={() => setSelectedCategory(isSelected ? '' : cat)}
                 className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-medium border transition-all uppercase tracking-wider ${
                   isSelected ? 'font-bold scale-[1.02]' : 'bg-white hover:bg-stone-50 border-[#E9E4DF]'
                 }`}
@@ -240,7 +259,7 @@ export default function Browse() {
               <div className="relative">
                 <input type="text" placeholder="Search descriptions, transcripts…"
                   value={searchKeyword}
-                  onChange={e => { setSearchKeyword(e.target.value); setVisibleCount(12) }}
+                  onChange={e => setSearchKeyword(e.target.value)}
                   className="w-full bg-[#fcfbfa] text-[#1c1917] placeholder-stone-400 rounded-lg pl-3 pr-8 py-2 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#1C3D27] border border-[#E9E4DF]" />
                 {searchKeyword
                   ? <button onClick={() => setSearchKeyword('')} className="absolute right-2.5 top-2.5 text-stone-400 hover:text-stone-700"><X className="w-3.5 h-3.5" /></button>
@@ -252,7 +271,7 @@ export default function Browse() {
             <div className="flex flex-col gap-1">
               <label className="text-[11px] font-bold text-stone-500 tracking-wide uppercase">Person</label>
               <div className="relative">
-                <select value={searchPerson} onChange={e => { setSearchPerson(e.target.value); setVisibleCount(12) }}
+                <select value={searchPerson} onChange={e => setSearchPerson(e.target.value)}
                   className="w-full bg-[#fcfbfa] text-[#1c1917] rounded-lg px-3 py-2 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#1C3D27] appearance-none pr-8 border border-[#E9E4DF]">
                   <option value="">All People</option>
                   {people.map(p => <option key={p} value={p}>{p}</option>)}
@@ -265,7 +284,7 @@ export default function Browse() {
             <div className="flex flex-col gap-1">
               <label className="text-[11px] font-bold text-stone-500 tracking-wide uppercase">Location</label>
               <div className="relative">
-                <select value={searchLocation} onChange={e => { setSearchLocation(e.target.value); setVisibleCount(12) }}
+                <select value={searchLocation} onChange={e => setSearchLocation(e.target.value)}
                   className="w-full bg-[#fcfbfa] text-[#1c1917] rounded-lg px-3 py-2 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#1C3D27] appearance-none pr-8 border border-[#E9E4DF]">
                   <option value="">All Locations</option>
                   {locations.map(l => <option key={l} value={l}>{l}</option>)}
@@ -279,11 +298,11 @@ export default function Browse() {
               <label className="text-[11px] font-bold text-stone-500 tracking-wide uppercase">Year Range</label>
               <div className="flex items-center gap-1.5">
                 <input type="number" placeholder="From" value={yearFrom}
-                  onChange={e => { setYearFrom(e.target.value); setVisibleCount(12) }}
+                  onChange={e => setYearFrom(e.target.value)}
                   className="w-1/2 bg-[#fcfbfa] text-[#1c1917] placeholder-stone-400 text-center rounded-lg py-2 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#1C3D27] border border-[#E9E4DF] font-mono" />
                 <span className="text-stone-400 text-[10px] font-bold">–</span>
                 <input type="number" placeholder="To" value={yearTo}
-                  onChange={e => { setYearTo(e.target.value); setVisibleCount(12) }}
+                  onChange={e => setYearTo(e.target.value)}
                   className="w-1/2 bg-[#fcfbfa] text-[#1c1917] placeholder-stone-400 text-center rounded-lg py-2 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#1C3D27] border border-[#E9E4DF] font-mono" />
               </div>
             </div>
@@ -306,10 +325,7 @@ export default function Browse() {
                     return (
                       <button
                         key={tag}
-                        onClick={() => {
-                          setSelectedTags(prev => active ? prev.filter(t => t !== tag) : [...prev, tag])
-                          setVisibleCount(12)
-                        }}
+                        onClick={() => setSelectedTags(prev => active ? prev.filter(t => t !== tag) : [...prev, tag])}
                         className={`w-full text-left px-3 py-1.5 text-xs font-mono flex items-center gap-2 transition-colors ${active ? 'bg-[#1C3D27]/5 text-[#1C3D27] font-bold' : 'text-stone-600 hover:bg-stone-50'}`}
                       >
                         <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 ${active ? 'bg-[#1C3D27] border-[#1C3D27]' : 'border-stone-300'}`}>
@@ -368,7 +384,7 @@ export default function Browse() {
         {/* Results bar */}
         <section className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
           <h2 className="font-serif text-xl sm:text-2xl font-bold italic text-stone-800">
-            {loading ? 'Loading…' : filteredIncidents.length === 0 ? 'No results' : `${filteredIncidents.length} Records`}
+            {loading ? 'Loading…' : total === 0 ? 'No results' : `${total} Records`}
             {hasActiveFilters && !loading && (
               <span className="ml-2 text-xs text-stone-400 bg-stone-100 py-0.5 px-2 rounded-full font-mono not-italic">filtered</span>
             )}
@@ -398,7 +414,7 @@ export default function Browse() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {[...Array(6)].map((_, i) => <div key={i} className="bg-white rounded-2xl border border-[#eae4da] h-48 animate-pulse" />)}
             </div>
-          ) : filteredIncidents.length === 0 ? (
+          ) : total === 0 ? (
             <div className="bg-white border border-[#eae4da]/90 rounded-2xl p-16 text-center max-w-lg mx-auto space-y-4">
               <div className="w-12 h-12 rounded-full bg-[#fdfaf2] text-stone-400 flex items-center justify-center mx-auto border border-[#eae4da]">
                 <Compass className="w-5 h-5 stroke-[1.5]" />
@@ -420,18 +436,18 @@ export default function Browse() {
                 )}
               </div>
 
-              {filteredIncidents.length > visibleCount && (
+              {allIncidents.length < total && (
                 <div className="mt-12 text-center">
                   <div className="inline-block bg-white border border-stone-200 rounded-full px-4 py-2 mb-3">
                     <span className="text-xs text-stone-500">
-                      Viewing <span className="font-bold font-mono text-stone-800">{visibleCount}</span> of{' '}
-                      <span className="font-bold font-mono text-stone-800">{filteredIncidents.length}</span>
+                      Viewing <span className="font-bold font-mono text-stone-800">{allIncidents.length}</span> of{' '}
+                      <span className="font-bold font-mono text-stone-800">{total}</span>
                     </span>
                   </div>
                   <div>
-                    <button onClick={() => setVisibleCount(v => v + 12)}
-                      className="px-6 py-2.5 bg-stone-900 hover:bg-stone-800 text-white rounded-full text-xs font-bold inline-flex items-center gap-2">
-                      Load more
+                    <button onClick={loadMore} disabled={loadingMore}
+                      className="px-6 py-2.5 bg-stone-900 hover:bg-stone-800 text-white rounded-full text-xs font-bold inline-flex items-center gap-2 disabled:opacity-60">
+                      {loadingMore ? 'Loading…' : 'Load more'}
                     </button>
                   </div>
                 </div>

@@ -57,15 +57,9 @@ export async function getArchiveStats() {
     }
   }
 
-  // People don't live in the people collection — count distinct names across both incident collections
+  // People don't live in the people collection — count the same (capped) list the browse dropdown uses
   try {
-    const [incPeople, bkPerson, bkOtherPeople] = await Promise.all([
-      db.collection(COLLECTIONS.incidents).distinct('people'),
-      db.collection(COLLECTIONS.bk_stories).distinct('person'),
-      db.collection(COLLECTIONS.bk_stories).distinct('other_people'),
-    ])
-    const flat = flattenDistinct([...incPeople, ...bkPerson, ...bkOtherPeople])
-    stats.people = new Set(flat).size
+    stats.people = (await getAllPeople()).length
   } catch {
     stats.people = 0
   }
@@ -153,9 +147,62 @@ export interface IncidentQuery {
   year_from?: number
   year_to?: number
   search_text?: string
+  tags?: string[]
+  sort?: 'asc' | 'desc'
   limit?: number
   skip?: number
   source?: 'standard' | 'bapa_katha' | 'all'
+}
+
+function buildIncFilter(q: Omit<IncidentQuery, 'limit' | 'skip'>): Record<string, unknown> {
+  const incFilter: Record<string, unknown> = {}
+  if (q.category && !q.category.startsWith('bk_')) incFilter.category = q.category
+  if (q.person)   incFilter.people    = { $regex: q.person,   $options: 'i' }
+  if (q.location) incFilter.locations = { $regex: q.location, $options: 'i' }
+  if (q.year_from || q.year_to) {
+    const yr: Record<string, number> = {}
+    if (q.year_from) yr.$gte = q.year_from
+    if (q.year_to)   yr.$lte = q.year_to
+    incFilter['date.year'] = yr
+  }
+  if (q.tags?.length) incFilter.tags = { $all: q.tags }
+  if (q.search_text) incFilter.$text = { $search: q.search_text }
+  return incFilter
+}
+
+function buildBkFilter(q: Omit<IncidentQuery, 'limit' | 'skip'>): Record<string, unknown> {
+  // BK stories store their category as either a single `category` string (legacy docs)
+  // or a `categories` array (newer docs) — match both. Each condition is pushed into
+  // $and rather than reusing the $or key directly, since person + search_text both
+  // need their own $or clause and a shared key would silently overwrite the first one.
+  const and: Record<string, unknown>[] = []
+  if (q.category?.startsWith('bk_')) {
+    and.push({ $or: [{ category: q.category }, { categories: q.category }] })
+  }
+  if (q.person) {
+    and.push({ $or: [
+      { person:        { $regex: q.person, $options: 'i' } },
+      { what_happened: { $regex: q.person, $options: 'i' } },
+    ] })
+  }
+  if (q.location) and.push({ location: { $regex: q.location, $options: 'i' } })
+  if (q.year_from || q.year_to) {
+    // time_life_stage is free text (e.g. "1995-1996", "Early 1980s") — match any year in range
+    const from = q.year_from ?? 1800
+    const to   = q.year_to   ?? new Date().getFullYear()
+    const years: number[] = []
+    for (let y = from; y <= to; y++) years.push(y)
+    and.push({ time_life_stage: { $regex: `\\b(${years.join('|')})\\b` } })
+  }
+  if (q.tags?.length) and.push({ tags: { $all: q.tags } })
+  if (q.search_text) {
+    and.push({ $or: [
+      { story_title:   { $regex: q.search_text, $options: 'i' } },
+      { summary:       { $regex: q.search_text, $options: 'i' } },
+      { what_happened: { $regex: q.search_text, $options: 'i' } },
+    ] })
+  }
+  return and.length ? { $and: and } : {}
 }
 
 function normalizeBKStory(doc: Record<string, unknown>): Record<string, unknown> {
@@ -176,58 +223,29 @@ export async function queryIncidents(q: IncidentQuery) {
   const source = q.source || 'all'
   const limit = q.limit ?? 20
   const skip  = q.skip  ?? 0
+  const incSortDir = q.sort === 'desc' ? -1 : 1
+  const bkSortDir  = q.sort === 'asc'  ? 1  : -1
 
-  // Build filter for incidents collection (skip bk_ categories)
-  const incFilter: Record<string, unknown> = {}
-  if (q.category && !q.category.startsWith('bk_')) incFilter.category = q.category
-  if (q.category?.startsWith('bk_') && source !== 'bapa_katha') {
-    // category is a BK category but we're in standard/all mode — no standard incidents match
-    if (source === 'standard') return { total: 0, incidents: [] }
+  if (q.category?.startsWith('bk_') && source === 'standard') {
+    // category is a BK category but we're in standard mode — no standard incidents match
+    return { total: 0, incidents: [] }
   }
-  if (q.person)   incFilter.people    = { $regex: q.person,   $options: 'i' }
-  if (q.location) incFilter.locations = { $regex: q.location, $options: 'i' }
-  if (q.year_from || q.year_to) {
-    const yr: Record<string, number> = {}
-    if (q.year_from) yr.$gte = q.year_from
-    if (q.year_to)   yr.$lte = q.year_to
-    incFilter['date.year'] = yr
-  }
-  if (q.search_text) incFilter.$text = { $search: q.search_text }
 
-  // Build filter for bk_stories collection
-  const bkFilter: Record<string, unknown> = {}
-  if (q.category?.startsWith('bk_')) bkFilter.categories = q.category
-  if (q.person) {
-    bkFilter.$or = [
-      { person:       { $regex: q.person, $options: 'i' } },
-      { what_happened:{ $regex: q.person, $options: 'i' } },
-    ]
-  }
-  if (q.location) bkFilter.location = { $regex: q.location, $options: 'i' }
-  if (q.year_from === q.year_to && q.year_from) {
-    // Exact year — filter BK stories whose time_life_stage contains that year
-    bkFilter.time_life_stage = { $regex: `\\b${q.year_from}\\b` }
-  }
-  if (q.search_text) {
-    bkFilter.$or = [
-      { story_title:  { $regex: q.search_text, $options: 'i' } },
-      { summary:      { $regex: q.search_text, $options: 'i' } },
-      { what_happened:{ $regex: q.search_text, $options: 'i' } },
-    ]
-  }
+  const incFilter = buildIncFilter(q)
+  const bkFilter  = buildBkFilter(q)
 
   try {
     if (source === 'standard') {
       const total = await db.collection(COLLECTIONS.incidents).countDocuments(incFilter)
       const docs  = await db.collection(COLLECTIONS.incidents)
-        .find(incFilter).sort({ 'date.year': 1 }).skip(skip).limit(limit).toArray()
+        .find(incFilter).sort({ 'date.year': incSortDir }).skip(skip).limit(limit).toArray()
       return { total, incidents: docs.map(d => ({ ...d, _id: d._id.toString() })) }
     }
 
     if (source === 'bapa_katha') {
       const total = await db.collection(COLLECTIONS.bk_stories).countDocuments(bkFilter)
       const docs  = await db.collection(COLLECTIONS.bk_stories)
-        .find(bkFilter).sort({ extracted_at: -1 }).skip(skip).limit(limit).toArray()
+        .find(bkFilter).sort({ extracted_at: bkSortDir }).skip(skip).limit(limit).toArray()
       return { total, incidents: docs.map(d => normalizeBKStory(d as Record<string, unknown>)) }
     }
 
@@ -241,7 +259,7 @@ export async function queryIncidents(q: IncidentQuery) {
 
     if (skip < incTotal) {
       const incDocs = await db.collection(COLLECTIONS.incidents)
-        .find(incFilter).sort({ 'date.year': 1 }).skip(skip).limit(limit).toArray()
+        .find(incFilter).sort({ 'date.year': incSortDir }).skip(skip).limit(limit).toArray()
       incidents.push(...incDocs.map(d => ({ ...d, _id: d._id.toString() })))
     }
 
@@ -249,13 +267,44 @@ export async function queryIncidents(q: IncidentQuery) {
     const bkLimit = limit - incidents.length
     if (bkLimit > 0) {
       const bkDocs = await db.collection(COLLECTIONS.bk_stories)
-        .find(bkFilter).sort({ extracted_at: -1 }).skip(bkSkip).limit(bkLimit).toArray()
+        .find(bkFilter).sort({ extracted_at: bkSortDir }).skip(bkSkip).limit(bkLimit).toArray()
       incidents.push(...bkDocs.map(d => normalizeBKStory(d as Record<string, unknown>)))
     }
 
     return { total, incidents }
   } catch {
     return { total: 0, incidents: [] }
+  }
+}
+
+// Category counts for the current filter set (category itself excluded), used to keep
+// the browse page's category pills accurate without downloading every matching record.
+export async function getCategoryCounts(q: Omit<IncidentQuery, 'category' | 'limit' | 'skip'>) {
+  const db = await getDb()
+  const source = q.source || 'standard'
+  const filterQuery = { ...q, category: undefined }
+
+  try {
+    if (source === 'bapa_katha') {
+      const bkFilter = buildBkFilter(filterQuery)
+      const rows = await db.collection(COLLECTIONS.bk_stories).aggregate([
+        { $match: bkFilter },
+        { $project: { cat: { $ifNull: [{ $arrayElemAt: ['$categories', 0] }, '$category'] } } },
+        { $group: { _id: '$cat', count: { $sum: 1 } } },
+      ]).toArray()
+      const categories = rows.filter(r => r._id).map(r => ({ category: r._id as string, count: r.count as number }))
+      return { total: categories.reduce((s, c) => s + c.count, 0), categories }
+    }
+
+    const incFilter = buildIncFilter(filterQuery)
+    const rows = await db.collection(COLLECTIONS.incidents).aggregate([
+      { $match: incFilter },
+      { $group: { _id: '$category', count: { $sum: 1 } } },
+    ]).toArray()
+    const categories = rows.filter(r => r._id).map(r => ({ category: r._id as string, count: r.count as number }))
+    return { total: categories.reduce((s, c) => s + c.count, 0), categories }
+  } catch {
+    return { total: 0, categories: [] as { category: string; count: number }[] }
   }
 }
 
