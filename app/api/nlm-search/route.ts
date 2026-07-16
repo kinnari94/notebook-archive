@@ -12,7 +12,7 @@ function askNotebook(notebookId: string, prompt: string): Promise<{ answer: stri
       env: process.env,
     })
     let stdout = ''
-    const timer = setTimeout(() => { proc.kill(); reject(new Error('timed out')) }, 60000)
+    const timer = setTimeout(() => { proc.kill(); reject(new Error('timed out')) }, 150000)
     proc.stdout.on('data', (d: Buffer) => { stdout += d.toString() })
     proc.on('close', () => {
       clearTimeout(timer)

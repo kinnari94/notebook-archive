@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { google } from 'googleapis'
-import { Readable } from 'stream'
+import { uploadToPicsio } from '@/lib/picsio'
 
+// Uploads to Pics.io and returns a stable same-origin URL through the picsio-image
+// proxy route (app/api/picsio-image/[assetId]/[revisionId]/route.ts) instead of a raw
+// Pics.io URL — Pics.io's API never gives out a permanent public file URL, so the
+// proxy resolves + caches a fresh signed one on every view instead.
 export async function POST(req: NextRequest) {
-  const keyJson  = process.env.GOOGLE_SERVICE_ACCOUNT_KEY
-  const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID
-
-  if (!keyJson) {
-    return NextResponse.json({ error: 'GOOGLE_SERVICE_ACCOUNT_KEY not set in .env.local' }, { status: 500 })
+  if (!process.env.PICSIO_API_KEY || !process.env.PICSIO_COLLECTION_ID) {
+    return NextResponse.json({ error: 'PICSIO_API_KEY / PICSIO_COLLECTION_ID not set in .env.local' }, { status: 500 })
   }
 
   let formData: FormData
@@ -20,51 +20,17 @@ export async function POST(req: NextRequest) {
   const file = formData.get('file') as File | null
   if (!file) return NextResponse.json({ error: 'No file in request' }, { status: 400 })
 
-  let credentials: Record<string, string>
   try {
-    credentials = JSON.parse(keyJson)
-    if (credentials.private_key) {
-      credentials.private_key = credentials.private_key.replace(/\\n/g, '\n')
-    }
-  } catch (e) {
-    return NextResponse.json({ error: 'GOOGLE_SERVICE_ACCOUNT_KEY is not valid JSON', detail: String(e) }, { status: 500 })
-  }
-
-  try {
-    const auth = new google.auth.GoogleAuth({
-      credentials,
-      scopes: ['https://www.googleapis.com/auth/drive'],
-    })
-    const drive = google.drive({ version: 'v3', auth })
-
     const buffer = Buffer.from(await file.arrayBuffer())
-    const body   = Readable.from(buffer)
+    const fileName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`
 
-    // supportsAllDrives is required for Shared Drive folders (IDs starting with 0A)
-    const uploaded = await drive.files.create({
-      supportsAllDrives: true,
-      requestBody: {
-        name: `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`,
-        mimeType: file.type || 'image/jpeg',
-        ...(folderId ? { parents: [folderId] } : {}),
-      },
-      media: { mimeType: file.type || 'image/jpeg', body },
-      fields: 'id,name',
-    })
+    const { assetId, revisionId } = await uploadToPicsio(buffer, fileName, file.type || 'image/jpeg')
 
-    const fileId = uploaded.data.id!
-
-    await drive.permissions.create({
-      fileId,
-      supportsAllDrives: true,
-      requestBody: { role: 'reader', type: 'anyone' },
-    })
-
-    const url = `https://drive.google.com/thumbnail?id=${fileId}&sz=w1200`
-    return NextResponse.json({ url, fileId })
+    const url = `/api/picsio-image/${assetId}/${revisionId}`
+    return NextResponse.json({ url, fileId: assetId })
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
-    console.error('[upload] Google Drive error:', msg)
+    console.error('[upload] Pics.io error:', msg)
     return NextResponse.json({ error: msg }, { status: 500 })
   }
 }

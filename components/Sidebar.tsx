@@ -2,7 +2,9 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut } from 'next-auth/react'
-import { LayoutDashboard, BookOpen, Search, Clock, FlaskConical, Archive, LogOut, Package, Users } from 'lucide-react'
+import {
+  LayoutDashboard, BookOpen, Search, Clock, FlaskConical, Archive, LogOut, Package, Users,
+} from 'lucide-react'
 
 const nav = [
   { href: '/dashboard',   label: 'Dashboard',   icon: LayoutDashboard, viewKey: 'dashboard' },
@@ -47,7 +49,7 @@ export default function Sidebar({ user }: { user?: User }) {
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 px-3 py-5 space-y-1">
+      <nav className="flex-1 px-3 py-5 space-y-1 overflow-y-auto">
         {visibleNav.map(({ href, label, icon: Icon }) => {
           const active = path === href || path.startsWith(href + '/')
           return (

@@ -25,4 +25,11 @@ body {
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
+  .no-scrollbar {
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE / legacy Edge */
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, modern Edge */
+  }
 }

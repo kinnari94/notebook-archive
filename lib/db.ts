@@ -44,6 +44,19 @@ export const COLLECTIONS = {
   artifacts: 'artifacts',
   social_contextual: 'social_contextual',
   counts: 'counts',
+  // SRMD Collection Assessment Workbook — see lib/srmd-sheets.ts and scripts/import-srmd-workbook.mjs
+  srmd_readme: 'srmd_readme',
+  srmd_lists_config: 'srmd_lists_config',
+  srmd_inventory_master: 'srmd_inventory_master',
+  srmd_condition_assess: 'srmd_condition_assess',
+  srmd_risk_priority: 'srmd_risk_priority',
+  srmd_location_storage: 'srmd_location_storage',
+  srmd_photo_log: 'srmd_photo_log',
+  srmd_environment_summary: 'srmd_environment_summary',
+  srmd_treatment_recommendations: 'srmd_treatment_recommendations',
+  srmd_change_log: 'srmd_change_log',
+  srmd_custom_dropdown_options: 'srmd_custom_dropdown_options',
+  srmd_picsio_url_cache: 'srmd_picsio_url_cache',
 } as const
 
 export async function getArchiveStats() {

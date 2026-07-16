@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDb } from '@/lib/db'
 import { ObjectId } from 'mongodb'
+import { canEditCollections } from '@/lib/require-edit'
 
 const COL = 'physical_collections'
+const DENIED = NextResponse.json({ error: 'Access Denied' }, { status: 403 })
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
@@ -39,6 +41,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  if (!(await canEditCollections())) return DENIED
   const body = await req.json()
   const db = await getDb()
   const now = new Date()
@@ -47,6 +50,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
+  if (!(await canEditCollections())) return DENIED
   const { searchParams } = new URL(req.url)
   const id = searchParams.get('id')
   if (!id) return NextResponse.json({ ok: false }, { status: 400 })
@@ -60,6 +64,7 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  if (!(await canEditCollections())) return DENIED
   const { searchParams } = new URL(req.url)
   const id = searchParams.get('id')
   if (!id) return NextResponse.json({ ok: false }, { status: 400 })

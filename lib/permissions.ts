@@ -35,3 +35,19 @@ export const DEFAULT_GUEST_PERMISSIONS: ViewPermissions = {
   extract: 'no_access',
   settings: 'no_access',
 }
+
+// Pure check usable from both client components (after useSession()) and server
+// route handlers (after getServerSession()) — no next-auth import here, so it can't
+// create a circular import with lib/auth-options.ts (which imports from this file).
+// `permissions == null` covers open-access mode (no allowed_users configured yet),
+// where the jwt callback also sets role to 'admin', but this is checked independently
+// as a defensive fallback.
+export function hasEditAccess(
+  role: string | null | undefined,
+  permissions: ViewPermissions | null | undefined,
+  viewKey: string
+): boolean {
+  if (role === 'admin') return true
+  if (permissions == null) return true
+  return permissions[viewKey] === 'edit'
+}

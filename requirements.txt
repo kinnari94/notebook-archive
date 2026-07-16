@@ -1,0 +1,2 @@
+playwright>=1.61.0
+notebooklm-py>=0.7.3
