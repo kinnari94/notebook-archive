@@ -21,6 +21,38 @@ export async function getDb(): Promise<Db> {
     db.collection('bk_stories').createIndex({ person: 1 }).catch(() => {})
     db.collection('bk_stories').createIndex({ location: 1 }).catch(() => {})
     db.collection('bk_stories').createIndex({ extracted_at: -1 }).catch(() => {})
+    // SRMD sheet unique fields (mirrors uniqueFields in lib/srmd-sheets.ts) — a real
+    // unique index so a duplicate slips through even if a race beats the API's own
+    // findOne check. A partial filter (not `sparse`) excludes both missing AND
+    // blank-string values from the constraint — plain `sparse` only skips documents
+    // missing the field entirely, so two legacy rows that both have e.g. Photo_ID: ""
+    // would still collide and silently block index creation.
+    // Note: srmd_condition_assess already has one legacy pair sharing an Object_ID
+    // (re-assessment of the same object before this constraint existed), so that
+    // specific index create will fail and log nothing (caught below) — the API's
+    // findOne check still blocks any *new* Object_ID duplicates there regardless.
+    const srmdUniqueIndexes: [string, string][] = [
+      ['srmd_inventory_master', 'Object_ID'],
+      ['srmd_condition_assess', 'Condition_ID'],
+      ['srmd_condition_assess', 'Object_ID'],
+      ['srmd_risk_priority', 'Risk_ID'],
+      ['srmd_risk_priority', 'Object_ID'],
+      ['srmd_location_storage', 'Location_ID'],
+      ['srmd_photo_log', 'Photo_ID'],
+      ['srmd_photo_log', 'Object_ID'],
+      ['srmd_environment_summary', 'Env_ID'],
+      ['srmd_treatment_recommendations', 'Treatment_ID'],
+      ['srmd_treatment_recommendations', 'Object_ID'],
+      ['srmd_change_log', 'Change_ID'],
+    ]
+    for (const [collection, field] of srmdUniqueIndexes) {
+      // $gt: '' (not $ne — partial filter expressions don't support $ne/$not) reads as
+      // "any non-empty string", which also implies existence, so no separate $exists needed.
+      db.collection(collection).createIndex(
+        { [field]: 1 },
+        { unique: true, partialFilterExpression: { [field]: { $gt: '' } } }
+      ).catch(() => {})
+    }
   }
   return db
 }

@@ -22,7 +22,7 @@ export default function ReadMeView() {
 
   if (!sections) {
     return (
-      <div className="min-h-screen bg-[#F7F3ED] flex items-center justify-center text-[#1B3A2E]/40">
+      <div className="min-h-screen bg-[#F7F3ED] flex items-center justify-center text-[#5C1F2E]/40">
         <Loader2 className="w-5 h-5 animate-spin mr-2" /> Loading…
       </div>
     )
@@ -34,15 +34,15 @@ export default function ReadMeView() {
   const keyRules    = sections.find(s => s.section === 'key_rules')?.text
 
   return (
-    <div className="min-h-screen bg-[#F7F3ED] text-[#1B3A2E] pb-16 font-sans">
+    <div className="min-h-screen bg-[#F7F3ED] text-[#5C1F2E] pb-16 font-sans">
       <header className="bg-white py-4 px-6 sticky top-0 z-30 border-b border-[#E8E3DB]">
         <div className="flex items-center gap-3">
-          <div className="bg-[#1B3A2E] text-white p-2 rounded-lg">
+          <div className="bg-[#5C1F2E] text-white p-2 rounded-lg">
             <BookOpen className="w-4 h-4" />
           </div>
           <div>
-            <h1 className="font-serif text-xl font-bold text-[#1C3D27] tracking-tight leading-none">Read Me</h1>
-            <p className="text-[10px] font-mono text-[#1B3A2E]/40 mt-1">SRMD Workbook · 00_Read_Me</p>
+            <h1 className="font-serif text-xl font-bold text-[#5C1F2E] tracking-tight leading-none">Read Me</h1>
+            <p className="text-[10px] font-mono text-[#5C1F2E]/40 mt-1">SRMD Workbook · 00_Read_Me</p>
           </div>
         </div>
       </header>
@@ -50,8 +50,8 @@ export default function ReadMeView() {
       <div className="px-6 lg:px-8 py-6 space-y-5 max-w-3xl">
         {header && (
           <div className="bg-white border border-[#E8E3DB]/70 rounded-xl p-5">
-            <h2 className="font-serif text-xl font-bold text-[#1C3D27]">{String(header.title || '')}</h2>
-            <p className="text-[#1B3A2E]/60 text-sm mt-1">{String(header.subtitle || '')}</p>
+            <h2 className="font-serif text-xl font-bold text-[#5C1F2E]">{String(header.title || '')}</h2>
+            <p className="text-[#5C1F2E]/60 text-sm mt-1">{String(header.subtitle || '')}</p>
           </div>
         )}
 
@@ -75,8 +75,8 @@ export default function ReadMeView() {
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-y border-[#E8E3DB] bg-[#FAF8F5]">
-                  <th className="text-left px-5 py-2 font-mono text-[10px] uppercase tracking-wider text-[#1B3A2E]/50">Sheet</th>
-                  <th className="text-left px-5 py-2 font-mono text-[10px] uppercase tracking-wider text-[#1B3A2E]/50">Primary User</th>
+                  <th className="text-left px-5 py-2 font-mono text-[10px] uppercase tracking-wider text-[#5C1F2E]/50">Sheet</th>
+                  <th className="text-left px-5 py-2 font-mono text-[10px] uppercase tracking-wider text-[#5C1F2E]/50">Primary User</th>
                 </tr>
               </thead>
               <tbody>

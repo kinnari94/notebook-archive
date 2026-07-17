@@ -18,7 +18,11 @@ interface DashboardData {
 
 function StatTile({ label, value, highlight }: { label: string; value: string | number; highlight?: boolean }) {
   return (
-    <div className={`rounded-xl p-4 border ${highlight ? 'bg-red-50 border-red-200' : 'bg-white border-[#E8E3DB]/70'}`}>
+    <div className={`rounded-xl p-4 border transition-shadow duration-200 hover:shadow-[0_8px_20px_rgba(27,58,46,0.12)] ${
+      highlight
+        ? 'bg-gradient-to-b from-red-50 to-red-50/60 border-red-200 shadow-[0_1px_3px_rgba(190,18,60,0.08)]'
+        : 'bg-gradient-to-b from-white to-[#FBF9F5] border-[#E8E3DB]/70 shadow-[0_1px_3px_rgba(27,58,46,0.06),0_1px_2px_rgba(27,58,46,0.04)]'
+    }`}>
       <span className={`text-[9px] font-mono uppercase tracking-wider block ${highlight ? 'text-red-700/70' : 'text-[#1B3A2E]/40'}`}>{label}</span>
       <span className={`text-2xl font-semibold font-mono block mt-1 ${highlight ? 'text-red-700' : 'text-[#1B3A2E]'}`}>{value}</span>
     </div>
@@ -28,7 +32,7 @@ function StatTile({ label, value, highlight }: { label: string; value: string | 
 function Breakdown({ title, rows, barClass }: { title: string; rows: { label: string; count: number }[]; barClass?: (label: string) => string }) {
   const max = Math.max(1, ...rows.map(r => r.count))
   return (
-    <div className="bg-white border border-[#E8E3DB]/70 rounded-xl p-5">
+    <div className="bg-gradient-to-b from-white to-[#FBF9F5] border border-[#E8E3DB]/70 rounded-xl p-5 shadow-[0_1px_3px_rgba(27,58,46,0.06),0_1px_2px_rgba(27,58,46,0.04)] hover:shadow-[0_8px_20px_rgba(27,58,46,0.10)] transition-shadow duration-200">
       <span className="text-[9px] font-mono font-bold text-stone-500 uppercase tracking-wider block mb-3">{title}</span>
       <div className="space-y-2">
         {rows.map(r => (
@@ -94,7 +98,7 @@ export default function DashboardView() {
 
           {/* Data Quality Checks + Environmental Alerts */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div className="bg-white border border-[#E8E3DB]/70 rounded-xl p-5">
+            <div className="bg-gradient-to-b from-white to-[#FBF9F5] border border-[#E8E3DB]/70 rounded-xl p-5 shadow-[0_1px_3px_rgba(27,58,46,0.06),0_1px_2px_rgba(27,58,46,0.04)] hover:shadow-[0_8px_20px_rgba(27,58,46,0.10)] transition-shadow duration-200">
               <span className="text-[9px] font-mono font-bold text-stone-500 uppercase tracking-wider block mb-3">Data Quality Checks</span>
               <div className="space-y-2">
                 {data.dataQualityChecks.map(c => (
@@ -117,7 +121,7 @@ export default function DashboardView() {
               </div>
             </div>
 
-            <div className="bg-white border border-[#E8E3DB]/70 rounded-xl p-5">
+            <div className="bg-gradient-to-b from-white to-[#FBF9F5] border border-[#E8E3DB]/70 rounded-xl p-5 shadow-[0_1px_3px_rgba(27,58,46,0.06),0_1px_2px_rgba(27,58,46,0.04)] hover:shadow-[0_8px_20px_rgba(27,58,46,0.10)] transition-shadow duration-200">
               <span className="text-[9px] font-mono font-bold text-stone-500 uppercase tracking-wider block mb-3">Environmental Alerts</span>
               {data.environmentalAlerts.length === 0 ? (
                 <p className="text-[#1B3A2E]/40 text-xs py-2">No environmental alerts logged yet.</p>

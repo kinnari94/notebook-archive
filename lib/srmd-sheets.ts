@@ -6,7 +6,7 @@
 
 import {
   RECORD_LEVEL_OPTIONS, COLLECTION_TYPE_OPTIONS, ACCESS_LEVEL_OPTIONS, SURVEY_STATUS_OPTIONS,
-  OVERALL_CONDITION_OPTIONS, RISK_TYPE_OPTIONS, PRIORITY_BAND_OPTIONS, YES_NO_OPTIONS,
+  OVERALL_CONDITION_OPTIONS, RISK_TYPE_OPTIONS, PRIORITY_BAND_OPTIONS,
   USER_OPTIONS, PHOTO_VIEW_OPTIONS, ALL_DAMAGE_TERMS, type Option,
 } from '@/lib/srmdLists'
 import {
@@ -27,11 +27,19 @@ export interface SrmdColumn {
 export interface SrmdField {
   key: string
   label: string
-  type: 'text' | 'textarea' | 'date' | 'number' | 'select' | 'combo' | 'image' | 'hidden'
+  type: 'text' | 'textarea' | 'date' | 'number' | 'select' | 'combo' | 'image' | 'hidden' | 'checkbox'
   options?: Option[]
   // For 'select'/'combo' fields backed by a shared, user-extensible option list —
   // see lib/dropdown-option-sets.ts. Fields without this key show a fixed list only.
   optionSetKey?: string
+  // For 'date' fields — pre-fills with today's date when opening the Add form
+  // (edit mode always shows the record's own stored value, never today's date).
+  defaultToday?: boolean
+  // For 'text' fields named Month_Key — mirrors the workbook's own formula
+  // =IF(C3="","",TEXT(C3,"yyyy-mm")): auto-derived as the "yyyy-mm" of the named
+  // date field, blank when that date is blank. Read-only in the form since it's
+  // computed, not entered.
+  deriveMonthFrom?: string
 }
 
 export interface SrmdSheetConfig {
@@ -43,6 +51,11 @@ export interface SrmdSheetConfig {
   sortField: string
   sortDir: 1 | -1
   objectIdField?: string
+  // Field(s) that must each individually hold a unique value within this sheet's
+  // collection — enforced unique by the API on create/update. Usually just the
+  // sheet's own primary ID (e.g. 'Condition_ID'), but some sheets also require
+  // Object_ID itself to be unique (i.e. only one record per object, ever).
+  uniqueFields?: string[]
   groupBy?: string
   columns: SrmdColumn[]
   fields: SrmdField[]
@@ -52,15 +65,15 @@ export interface SrmdSheetConfig {
   imageField?: string
 }
 
-const t = (key: string, label: string): SrmdField => ({ key, label, type: 'text' })
+const t = (key: string, label: string, opts?: { deriveMonthFrom?: string }): SrmdField => ({ key, label, type: 'text', ...opts })
 const ta = (key: string, label: string): SrmdField => ({ key, label, type: 'textarea' })
-const d = (key: string, label: string): SrmdField => ({ key, label, type: 'date' })
+const d = (key: string, label: string, opts?: { defaultToday?: boolean }): SrmdField => ({ key, label, type: 'date', ...opts })
 const n = (key: string, label: string): SrmdField => ({ key, label, type: 'number' })
 const sel = (key: string, label: string, options: Option[], optionSetKey?: string): SrmdField =>
   ({ key, label, type: 'select', options, optionSetKey })
 const combo = (key: string, label: string, options: Option[], optionSetKey?: string): SrmdField =>
   ({ key, label, type: 'combo', options, optionSetKey })
-const yesNo = (key: string, label: string): SrmdField => sel(key, label, YES_NO_OPTIONS, 'YES_NO')
+const yesNo = (key: string, label: string): SrmdField => ({ key, label, type: 'checkbox' })
 const image = (key: string, label: string): SrmdField => ({ key, label, type: 'image' })
 // Tracked in formData/saved like any other field, but never rendered in the add/edit
 // form or shown in the detail drawer — used for the Photo Log's cached thumbnail.
@@ -71,7 +84,7 @@ export const SRMD_SHEETS: SrmdSheetConfig[] = [
     slug: 'inventory', label: 'Inventory Master', sheetTab: '02_Inventory_Master',
     collection: 'srmd_inventory_master',
     searchFields: ['Object_ID', 'Object_Name', 'Alternate_Title', 'Material_Primary', 'Existing_Accession_No'],
-    sortField: 'Object_ID', sortDir: 1, objectIdField: 'Object_ID',
+    sortField: 'Object_ID', sortDir: 1, objectIdField: 'Object_ID', uniqueFields: ['Object_ID'],
     titleField: 'Object_Name', subtitleField: 'Object_ID',
     columns: [
       { key: 'Object_ID', label: 'Object ID' },
@@ -97,7 +110,7 @@ export const SRMD_SHEETS: SrmdSheetConfig[] = [
       t('Current_Location_ID', 'Current Location ID'),
       sel('Access_Level', 'Access Level', ACCESS_LEVEL_OPTIONS, 'ACCESS_LEVEL'),
       sel('Survey_Status', 'Survey Status', SURVEY_STATUS_OPTIONS, 'SURVEY_STATUS'),
-      d('Entry_Date', 'Entry Date'), sel('Entered_By', 'Entered By', USER_OPTIONS, 'USERS'),
+      d('Entry_Date', 'Entry Date', { defaultToday: true }), sel('Entered_By', 'Entered By', USER_OPTIONS, 'USERS'),
       ta('Notes', 'Notes'),
     ],
   },
@@ -105,7 +118,7 @@ export const SRMD_SHEETS: SrmdSheetConfig[] = [
     slug: 'condition', label: 'Condition Assessment', sheetTab: '03_Condition_Assess',
     collection: 'srmd_condition_assess',
     searchFields: ['Condition_ID', 'Object_ID', 'Assessor', 'Condition_Summary'],
-    sortField: 'Assessment_Date', sortDir: -1, objectIdField: 'Object_ID',
+    sortField: 'Assessment_Date', sortDir: -1, objectIdField: 'Object_ID', uniqueFields: ['Condition_ID', 'Object_ID'],
     titleField: 'Object_ID', subtitleField: 'Assessment_Date', badgeField: 'Overall_Condition',
     columns: [
       { key: 'Condition_ID', label: 'Condition ID' },
@@ -117,7 +130,7 @@ export const SRMD_SHEETS: SrmdSheetConfig[] = [
     ],
     fields: [
       t('Condition_ID', 'Condition ID'), t('Object_ID', 'Object ID'),
-      d('Assessment_Date', 'Assessment Date'), sel('Assessor', 'Assessor', USER_OPTIONS, 'USERS'),
+      d('Assessment_Date', 'Assessment Date', { defaultToday: true }), sel('Assessor', 'Assessor', USER_OPTIONS, 'USERS'),
       sel('Assessment_Type', 'Assessment Type', ASSESSMENT_TYPE_OPTIONS, 'ASSESSMENT_TYPE'),
       n('Support_Structure_Score', 'Support Structure Score'), n('Surface_Soil_Score', 'Surface Soil Score'),
       n('Tear_Split_Loss_Score', 'Tear/Split/Loss Score'), n('Discoloration_Stain_Score', 'Discoloration/Stain Score'),
@@ -130,14 +143,14 @@ export const SRMD_SHEETS: SrmdSheetConfig[] = [
       yesNo('Immediate_Stabilization_Needed', 'Immediate Stabilization Needed'),
       yesNo('Quarantine_Flag', 'Quarantine Flag'),
       ta('Condition_Summary', 'Condition Summary'), d('Next_Review_Date', 'Next Review Date'),
-      t('Photo_Reference_Note', 'Photo Reference Note'), t('Month_Key', 'Month Key'),
+      t('Photo_Reference_Note', 'Photo Reference Note'), t('Month_Key', 'Month Key', { deriveMonthFrom: 'Assessment_Date' }),
     ],
   },
   {
     slug: 'risk-priority', label: 'Risk & Priority', sheetTab: '04_Risk_Priority',
     collection: 'srmd_risk_priority',
     searchFields: ['Object_ID', 'Assessor', 'Primary_Risk_Type', 'Recommended_Action'],
-    sortField: 'Priority_Score', sortDir: -1, objectIdField: 'Object_ID',
+    sortField: 'Priority_Score', sortDir: -1, objectIdField: 'Object_ID', uniqueFields: ['Risk_ID', 'Object_ID'],
     titleField: 'Object_ID', subtitleField: 'Primary_Risk_Type', badgeField: 'Priority_Band',
     columns: [
       { key: 'Object_ID', label: 'Object ID' },
@@ -149,7 +162,7 @@ export const SRMD_SHEETS: SrmdSheetConfig[] = [
     ],
     fields: [
       t('Risk_ID', 'Risk ID'), t('Object_ID', 'Object ID'),
-      d('Assessment_Date', 'Assessment Date'), sel('Assessor', 'Assessor', USER_OPTIONS, 'USERS'),
+      d('Assessment_Date', 'Assessment Date', { defaultToday: true }), sel('Assessor', 'Assessor', USER_OPTIONS, 'USERS'),
       n('Spiritual_Significance', 'Spiritual Significance (1–5)'), n('Historical_Significance', 'Historical Significance (1–5)'),
       n('Research_Value', 'Research Value (1–5)'), n('Display_Value', 'Display Value (1–5)'),
       n('Significance_Total', 'Significance Total'),
@@ -158,14 +171,14 @@ export const SRMD_SHEETS: SrmdSheetConfig[] = [
       n('Risk_Score', 'Risk Score'), n('Priority_Score', 'Priority Score'),
       sel('Priority_Band', 'Priority Band', PRIORITY_BAND_OPTIONS, 'PRIORITY_BAND'),
       t('Recommended_Action_Window', 'Recommended Action Window'),
-      ta('Recommended_Action', 'Recommended Action'), t('Month_Key', 'Month Key'),
+      ta('Recommended_Action', 'Recommended Action'), t('Month_Key', 'Month Key', { deriveMonthFrom: 'Assessment_Date' }),
     ],
   },
   {
     slug: 'location-storage', label: 'Location & Storage', sheetTab: '05_Location_Storage',
     collection: 'srmd_location_storage',
     searchFields: ['Location_ID', 'Building_or_Area', 'Room'],
-    sortField: 'Location_ID', sortDir: 1,
+    sortField: 'Location_ID', sortDir: 1, uniqueFields: ['Location_ID'],
     titleField: 'Location_ID', subtitleField: 'Building_or_Area',
     columns: [
       { key: 'Location_ID', label: 'Location ID' },
@@ -189,7 +202,7 @@ export const SRMD_SHEETS: SrmdSheetConfig[] = [
     slug: 'photo-log', label: 'Photo Log', sheetTab: '06_Photo_Log',
     collection: 'srmd_photo_log',
     searchFields: ['Object_ID', 'Photographer', 'Master_File_Name'],
-    sortField: 'Object_ID', sortDir: 1, objectIdField: 'Object_ID',
+    sortField: 'Object_ID', sortDir: 1, objectIdField: 'Object_ID', uniqueFields: ['Photo_ID', 'Object_ID'],
     titleField: 'Object_ID', subtitleField: 'Photo_Date', badgeField: 'View_Type', imageField: 'Photo_URL',
     columns: [
       { key: 'Object_ID', label: 'Object ID' },
@@ -203,20 +216,20 @@ export const SRMD_SHEETS: SrmdSheetConfig[] = [
       t('Photo_ID', 'Photo ID'), t('Object_ID', 'Object ID'),
       image('Photo_URL', 'Photo'),
       hidden('Photo_Thumbnail', 'Photo Thumbnail'),
-      d('Photo_Date', 'Photo Date'), sel('Photographer', 'Photographer', USER_OPTIONS, 'USERS'), t('Camera_or_Device', 'Camera / Device'),
+      d('Photo_Date', 'Photo Date', { defaultToday: true }), sel('Photographer', 'Photographer', USER_OPTIONS, 'USERS'), t('Camera_or_Device', 'Camera / Device'),
       sel('View_Type', 'View Type', PHOTO_VIEW_OPTIONS, 'PHOTO_VIEW'), sel('Shot_Purpose', 'Shot Purpose', SHOT_PURPOSE_OPTIONS, 'SHOT_PURPOSE'),
       t('Master_File_Name', 'Master File Name'), t('Access_File_Name', 'Access File Name'),
       yesNo('Scale_Present', 'Scale Present'), yesNo('Color_Target_Present', 'Color Target Present'),
       sel('Background', 'Background', BACKGROUND_OPTIONS, 'BACKGROUND'), yesNo('Focus_Checked', 'Focus Checked'),
       t('File_Path_or_Folder', 'File Path / Folder'), ta('Editing_Note', 'Editing Note'),
-      sel('Rights_or_Restriction', 'Rights / Restriction', PHOTO_RIGHTS_OPTIONS, 'PHOTO_RIGHTS'), t('Month_Key', 'Month Key'),
+      sel('Rights_or_Restriction', 'Rights / Restriction', PHOTO_RIGHTS_OPTIONS, 'PHOTO_RIGHTS'), t('Month_Key', 'Month Key', { deriveMonthFrom: 'Photo_Date' }),
     ],
   },
   {
     slug: 'environment', label: 'Environment Summary', sheetTab: '07_Environment_Summary',
     collection: 'srmd_environment_summary',
     searchFields: ['Env_ID', 'Location_ID', 'Logger_ID'],
-    sortField: 'Summary_Period_Start', sortDir: -1,
+    sortField: 'Summary_Period_Start', sortDir: -1, uniqueFields: ['Env_ID'],
     titleField: 'Env_ID', subtitleField: 'Location_ID',
     columns: [
       { key: 'Env_ID', label: 'Env ID' },
@@ -241,7 +254,7 @@ export const SRMD_SHEETS: SrmdSheetConfig[] = [
     slug: 'treatments', label: 'Treatment Recommendations', sheetTab: '08_Treatment_Recommendations',
     collection: 'srmd_treatment_recommendations',
     searchFields: ['Treatment_ID', 'Object_ID', 'Recommended_By', 'Action_Type'],
-    sortField: 'Recommendation_Date', sortDir: -1, objectIdField: 'Object_ID',
+    sortField: 'Recommendation_Date', sortDir: -1, objectIdField: 'Object_ID', uniqueFields: ['Treatment_ID', 'Object_ID'],
     titleField: 'Object_ID', subtitleField: 'Action_Type', badgeField: 'Approval_Status',
     columns: [
       { key: 'Treatment_ID', label: 'Treatment ID' },
@@ -259,14 +272,14 @@ export const SRMD_SHEETS: SrmdSheetConfig[] = [
       t('Materials_or_Supplies', 'Materials / Supplies'), sel('Approval_Status', 'Approval Status', APPROVAL_STATUS_OPTIONS, 'APPROVAL_STATUS'),
       sel('Assigned_To', 'Assigned To', USER_OPTIONS, 'USERS'), d('Completion_Date', 'Completion Date'),
       ta('Outcome_Summary', 'Outcome Summary'), t('Treatment_Report_File', 'Treatment Report File'),
-      d('Post_Treatment_Review_Date', 'Post-Treatment Review Date'), t('Month_Key', 'Month Key'),
+      d('Post_Treatment_Review_Date', 'Post-Treatment Review Date'), t('Month_Key', 'Month Key', { deriveMonthFrom: 'Recommendation_Date' }),
     ],
   },
   {
     slug: 'change-log', label: 'Change Log', sheetTab: '09_Change_Log',
     collection: 'srmd_change_log',
     searchFields: ['Change_ID', 'User', 'Sheet_Name', 'Record_Key'],
-    sortField: 'Timestamp', sortDir: -1,
+    sortField: 'Timestamp', sortDir: -1, uniqueFields: ['Change_ID'],
     titleField: 'Record_Key', subtitleField: 'Timestamp',
     columns: [
       { key: 'Timestamp', label: 'When' },
@@ -276,7 +289,7 @@ export const SRMD_SHEETS: SrmdSheetConfig[] = [
       { key: 'Action_Type', label: 'Action' },
     ],
     fields: [
-      t('Change_ID', 'Change ID'), d('Timestamp', 'Timestamp'), sel('User', 'User', USER_OPTIONS, 'USERS'),
+      t('Change_ID', 'Change ID'), d('Timestamp', 'Timestamp', { defaultToday: true }), sel('User', 'User', USER_OPTIONS, 'USERS'),
       sel('Sheet_Name', 'Sheet Name', SHEET_NAME_OPTIONS, 'SHEET_NAME'), t('Record_Key', 'Record Key'),
       sel('Action_Type', 'Action Type', CHANGE_LOG_ACTION_TYPE_OPTIONS, 'CHANGE_LOG_ACTION_TYPE'),
       ta('Old_Value_Summary', 'Old Value Summary'), ta('New_Value_Summary', 'New Value Summary'),

@@ -1,8 +1,8 @@
 'use client'
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import { useSession } from 'next-auth/react'
-import { Search, Filter, Loader2, X, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Edit2, Trash2, Check, Archive, Image as ImageIcon } from 'lucide-react'
+import { Search, Filter, Loader2, X, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Edit2, Trash2, Check, Archive, Image as ImageIcon, AlertTriangle, Calendar } from 'lucide-react'
 import { getSrmdSheet, type SrmdField } from '@/lib/srmd-sheets'
 import { OVERALL_CONDITION_META, PRIORITY_BAND_META } from '@/lib/srmdLists'
 import { hasEditAccess, type ViewPermissions } from '@/lib/permissions'
@@ -18,12 +18,21 @@ function humanize(key: string): string {
   return key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 }
 
+// dd-mm-yyyy, always — not toLocaleDateString(), whose day/month order and
+// separator depend on the browser/server locale (was showing dd/mm/yyyy for some,
+// mm/dd/yyyy for others). Built from the date's own y/m/d parts, not by re-parsing
+// a "yyyy-mm-dd" string through `new Date(...)`, which reinterprets it in local
+// time and can roll the displayed day back/forward by one near midnight.
+function formatDMY(y: number, m: number, day: number): string {
+  return `${String(day).padStart(2, '0')}-${String(m).padStart(2, '0')}-${y}`
+}
+
 function formatVal(v: unknown): string {
   if (v == null || v === '') return '—'
-  if (v instanceof Date) return new Date(v).toLocaleDateString()
-  if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(v)) {
-    const d = new Date(v)
-    if (!isNaN(d.getTime())) return d.toLocaleDateString()
+  if (v instanceof Date) return formatDMY(v.getFullYear(), v.getMonth() + 1, v.getDate())
+  if (typeof v === 'string') {
+    const m = v.match(/^(\d{4})-(\d{2})-(\d{2})/)
+    if (m) return formatDMY(Number(m[1]), Number(m[2]), Number(m[3]))
   }
   return String(v)
 }
@@ -34,6 +43,93 @@ function toDateInputValue(v: unknown): string {
   if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10)
   const d = new Date(s)
   return isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10)
+}
+
+function isoToDMY(iso: string): string {
+  if (!iso) return ''
+  const [y, m, d] = iso.split('-')
+  return `${d}-${m}-${y}`
+}
+
+// Strict — rejects "31-02-2026" etc, not just malformed shape, by checking the
+// constructed date's own fields round-trip back to what was typed.
+function dmyToIso(dmy: string): string | null {
+  const m = dmy.match(/^(\d{2})-(\d{2})-(\d{4})$/)
+  if (!m) return null
+  const [, d, mo, y] = m
+  const date = new Date(Number(y), Number(mo) - 1, Number(d))
+  if (date.getFullYear() !== Number(y) || date.getMonth() !== Number(mo) - 1 || date.getDate() !== Number(d)) return null
+  return `${y}-${mo}-${d}`
+}
+
+// Native <input type="date"> always renders in the browser/OS locale's own
+// day/month order and separator, which can't be overridden with CSS or the
+// value format — so this pairs a plain dd-mm-yyyy text field (typed directly,
+// auto-inserting the dashes) with a hidden native date input driving a calendar
+// icon button, for people who'd rather pick from a calendar than type it.
+function DateInputDMY({ value, onChange, className }: { value: string; onChange: (v: string) => void; className?: string }) {
+  const iso = toDateInputValue(value)
+  const [text, setText] = useState(isoToDMY(iso))
+  const nativeRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => { setText(isoToDMY(iso)) }, [iso])
+
+  function handleTextChange(raw: string) {
+    const digits = raw.replace(/\D/g, '').slice(0, 8)
+    const masked = digits.length > 4
+      ? `${digits.slice(0, 2)}-${digits.slice(2, 4)}-${digits.slice(4)}`
+      : digits.length > 2
+        ? `${digits.slice(0, 2)}-${digits.slice(2)}`
+        : digits
+    setText(masked)
+    if (masked === '') { onChange(''); return }
+    const parsed = dmyToIso(masked)
+    if (parsed) onChange(parsed)
+  }
+
+  return (
+    <div className="relative">
+      <input
+        type="text"
+        inputMode="numeric"
+        placeholder="dd-mm-yyyy"
+        value={text}
+        onChange={e => handleTextChange(e.target.value)}
+        className={`${className} pr-8`}
+      />
+      <button
+        type="button"
+        tabIndex={-1}
+        onClick={() => (nativeRef.current as (HTMLInputElement & { showPicker?: () => void }) | null)?.showPicker?.()}
+        className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 cursor-pointer"
+        title="Pick from calendar"
+      >
+        <Calendar className="w-3.5 h-3.5" />
+      </button>
+      <input
+        ref={nativeRef}
+        type="date"
+        value={iso}
+        onChange={e => onChange(e.target.value)}
+        className="absolute inset-0 opacity-0 pointer-events-none"
+        tabIndex={-1}
+        aria-hidden="true"
+      />
+    </div>
+  )
+}
+
+// Mirrors the workbook's own Month_Key formula: =IF(C3="","",TEXT(C3,"yyyy-mm")) —
+// blank when the source date is blank, else that date's "yyyy-mm".
+function withDerivedMonthKeys(data: Record<string, string>, fields: SrmdField[]): Record<string, string> {
+  let next = data
+  for (const f of fields) {
+    if (!f.deriveMonthFrom) continue
+    const src = toDateInputValue(next[f.deriveMonthFrom] ?? '')
+    const derived = src ? src.slice(0, 7) : ''
+    if (next[f.key] !== derived) next = { ...next, [f.key]: derived }
+  }
+  return next
 }
 
 function badgeMetaFor(field: string | undefined, value: unknown) {
@@ -102,15 +198,49 @@ function FormField({
         </>
       )
     }
+    case 'checkbox':
+      return (
+        <div className="inline-flex items-center gap-4 py-1.5">
+          <label className="inline-flex items-center gap-1.5 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={value === 'Yes'}
+              onChange={e => onChange(e.target.checked ? 'Yes' : '')}
+              className="w-4 h-4 rounded border-[#eae4da] accent-emerald-600 cursor-pointer focus:outline-none focus:ring-1 focus:ring-emerald-600"
+            />
+            <span className="text-xs font-bold text-emerald-700">Yes</span>
+          </label>
+          <label className="inline-flex items-center gap-1.5 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={value === 'No'}
+              onChange={e => onChange(e.target.checked ? 'No' : '')}
+              className="w-4 h-4 rounded border-[#eae4da] accent-red-600 cursor-pointer focus:outline-none focus:ring-1 focus:ring-red-600"
+            />
+            <span className="text-xs font-bold text-red-700">No</span>
+          </label>
+        </div>
+      )
     case 'textarea':
       return <textarea value={value} onChange={e => onChange(e.target.value)} rows={2} className={`${cls} resize-none`} />
     case 'date':
-      return <input type="date" value={toDateInputValue(value)} onChange={e => onChange(e.target.value)} className={cls} />
+      return <DateInputDMY value={value} onChange={onChange} className={cls} />
     case 'number':
       return <input type="number" value={value} onChange={e => onChange(e.target.value)} className={cls} />
     case 'hidden':
       return null
     default:
+      if (field.deriveMonthFrom) {
+        return (
+          <input
+            type="text"
+            value={value}
+            readOnly
+            title={`Auto-filled from ${field.deriveMonthFrom} — not editable`}
+            className={`${cls} bg-stone-100 text-stone-500 cursor-not-allowed`}
+          />
+        )
+      }
       return <input type="text" value={value} onChange={e => onChange(e.target.value)} className={cls} />
   }
 }
@@ -143,6 +273,7 @@ const SrmdSheetView = React.forwardRef<SrmdSheetViewHandle, { slug: string }>(fu
   const [formOpen, setFormOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [formData, setFormData] = useState<Record<string, string>>(emptyFormData)
+  const [formError, setFormError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [previewImg, setPreviewImg] = useState<string | null>(null)
@@ -175,7 +306,13 @@ const SrmdSheetView = React.forwardRef<SrmdSheetViewHandle, { slug: string }>(fu
 
   function openAdd() {
     setEditingId(null)
-    setFormData(emptyFormData)
+    const today = new Date().toISOString().slice(0, 10)
+    const withToday = {
+      ...emptyFormData,
+      ...Object.fromEntries(config.fields.filter(f => f.defaultToday).map(f => [f.key, today])),
+    }
+    setFormData(withDerivedMonthKeys(withToday, config.fields))
+    setFormError(null)
     setFormOpen(true)
   }
 
@@ -183,7 +320,9 @@ const SrmdSheetView = React.forwardRef<SrmdSheetViewHandle, { slug: string }>(fu
 
   function openEdit(item: Doc) {
     setEditingId(item._id)
-    setFormData(Object.fromEntries(config.fields.map(f => [f.key, item[f.key] != null ? String(item[f.key]) : ''])))
+    const fromItem = Object.fromEntries(config.fields.map(f => [f.key, item[f.key] != null ? String(item[f.key]) : '']))
+    setFormData(withDerivedMonthKeys(fromItem, config.fields))
+    setFormError(null)
     setFormOpen(true)
   }
 
@@ -208,6 +347,7 @@ const SrmdSheetView = React.forwardRef<SrmdSheetViewHandle, { slug: string }>(fu
   async function handleSave() {
     if (uploading) return
     setSaving(true)
+    setFormError(null)
     const payload: Record<string, unknown> = {}
     for (const f of config.fields) {
       const raw = formData[f.key]
@@ -219,21 +359,24 @@ const SrmdSheetView = React.forwardRef<SrmdSheetViewHandle, { slug: string }>(fu
       payload[f.key] = f.type === 'number' ? (raw === '' ? null : Number(raw)) : raw
     }
     try {
-      if (editingId) {
-        await fetch(`/api/srmd/${slug}?id=${editingId}`, {
-          method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
-        })
-      } else {
-        await fetch(`/api/srmd/${slug}`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
-        })
+      const res = editingId
+        ? await fetch(`/api/srmd/${slug}?id=${editingId}`, {
+            method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+          })
+        : await fetch(`/api/srmd/${slug}`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+          })
+      if (!res.ok) {
+        const json = await res.json().catch(() => null)
+        setFormError(json?.error || 'Failed to save. Please try again.')
+        return
       }
       setFormOpen(false)
       setEditingId(null)
       setFormData(emptyFormData)
       load()
     } catch (err) {
-      alert('Failed to save. Check your connection and try again.')
+      setFormError('Failed to save. Check your connection and try again.')
       console.error(err)
     } finally {
       setSaving(false)
@@ -256,7 +399,7 @@ const SrmdSheetView = React.forwardRef<SrmdSheetViewHandle, { slug: string }>(fu
       <div className="px-6 lg:px-8 py-6 space-y-8">
 
         {/* Search + filters */}
-        <div className="bg-white border border-[#E8E3DB]/60 rounded-xl p-5 space-y-3.5">
+        <div className="bg-gradient-to-b from-white to-[#FBF9F5] border border-[#E8E3DB]/60 rounded-xl p-5 space-y-3.5 shadow-[0_1px_3px_rgba(27,58,46,0.06),0_1px_2px_rgba(27,58,46,0.04)]">
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-2.5 w-4 h-4 text-[#1B3A2E]/40" />
@@ -332,8 +475,10 @@ const SrmdSheetView = React.forwardRef<SrmdSheetViewHandle, { slug: string }>(fu
                 <div
                   key={item._id}
                   onClick={() => setSelected(focused ? null : item)}
-                  className={`bg-white rounded-xl border transition-all duration-200 cursor-pointer overflow-hidden group flex flex-col justify-between ${
-                    focused ? 'border-[#1B3A2E] ring-1 ring-[#1B3A2E] shadow-sm' : 'border-[#E8E3DB]/70 hover:border-[#1B3A2E]/30 hover:shadow-sm'
+                  className={`bg-gradient-to-b from-white to-[#FBF9F5] rounded-xl border transition-all duration-200 cursor-pointer overflow-hidden group flex flex-col justify-between shadow-[0_1px_3px_rgba(27,58,46,0.08),0_1px_2px_rgba(27,58,46,0.05)] ${
+                    focused
+                      ? 'border-[#1B3A2E] ring-1 ring-[#1B3A2E] shadow-[0_8px_24px_rgba(27,58,46,0.16)]'
+                      : 'border-[#E8E3DB]/70 hover:border-[#1B3A2E]/30 hover:shadow-[0_10px_28px_rgba(27,58,46,0.14)] hover:-translate-y-0.5'
                   }`}
                 >
                   {config.imageField && (
@@ -434,7 +579,7 @@ const SrmdSheetView = React.forwardRef<SrmdSheetViewHandle, { slug: string }>(fu
             </div>
             <div className="flex-1 overflow-y-auto p-5 space-y-4">
               {config.imageField && (
-                <div className="relative rounded-xl overflow-hidden bg-stone-100 h-48 border border-stone-200/80">
+                <div className="relative rounded-xl overflow-hidden bg-stone-100 h-48 border border-stone-200/80 shadow-[0_4px_14px_rgba(27,58,46,0.10)]">
                   {String(selected[config.imageField] ?? '').trim() ? (
                     <img
                       src={String(selected[config.imageField]).trim()}
@@ -452,7 +597,7 @@ const SrmdSheetView = React.forwardRef<SrmdSheetViewHandle, { slug: string }>(fu
                   )}
                 </div>
               )}
-              <div className="bg-[#FAF8F5]/90 border border-stone-200 rounded-xl p-4 space-y-3">
+              <div className="bg-[#FAF8F5]/90 border border-stone-200 rounded-xl p-4 space-y-3 shadow-[0_1px_3px_rgba(27,58,46,0.05)]">
                 <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
                   {config.fields.filter(f => f.type !== 'image' && f.type !== 'hidden' && selected[f.key] != null && selected[f.key] !== '').map(f => (
                     <div key={f.key} className={f.type === 'textarea' ? 'col-span-2' : 'min-w-0 overflow-hidden'}>
@@ -472,7 +617,7 @@ const SrmdSheetView = React.forwardRef<SrmdSheetViewHandle, { slug: string }>(fu
                 const extra = Object.entries(selected).filter(([k]) => !HIDDEN_FIELDS.has(k) && !knownKeys.has(k))
                 if (!extra.length) return null
                 return (
-                  <div className="bg-[#FAF8F5]/90 border border-stone-200 rounded-xl p-4 space-y-3">
+                  <div className="bg-[#FAF8F5]/90 border border-stone-200 rounded-xl p-4 space-y-3 shadow-[0_1px_3px_rgba(27,58,46,0.05)]">
                     <span className="text-[9px] font-mono font-bold text-stone-500 uppercase tracking-wider block">📋 Additional Fields</span>
                     <div className="grid grid-cols-2 gap-3 text-xs">
                       {extra.map(([k, v]) => (
@@ -518,12 +663,18 @@ const SrmdSheetView = React.forwardRef<SrmdSheetViewHandle, { slug: string }>(fu
                     {config.sheetTab}
                   </p>
                 </div>
-                <button onClick={() => setFormOpen(false)} className="p-1.5 hover:bg-white/10 rounded-lg cursor-pointer transition-colors text-white">
+                <button onClick={() => { setFormOpen(false); setFormError(null) }} className="p-1.5 hover:bg-white/10 rounded-lg cursor-pointer transition-colors text-white">
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
               <form onSubmit={e => { e.preventDefault(); handleSave() }} className="p-6 overflow-y-auto space-y-4 text-xs flex-1">
+                {formError && (
+                  <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 text-red-700 rounded-lg px-3.5 py-3 text-xs font-semibold">
+                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span>{formError}</span>
+                  </div>
+                )}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {config.fields.map(f => {
                     if (f.type === 'hidden') return null
@@ -597,6 +748,23 @@ const SrmdSheetView = React.forwardRef<SrmdSheetViewHandle, { slug: string }>(fu
                         </div>
                       )
                     }
+                    if (f.type === 'checkbox') {
+                      return (
+                        <div key={f.key} className="flex items-center gap-2.5">
+                          <span className="font-bold text-stone-600">{f.label}</span>
+                          <FormField
+                            field={f}
+                            value={formData[f.key] ?? ''}
+                            onChange={val => setFormData(p => ({ ...p, [f.key]: val }))}
+                            optionSets={optionSets}
+                            customValues={customValues}
+                            canAddOption={canEdit}
+                            onAddOption={addOption}
+                            onDeleteOption={deleteOption}
+                          />
+                        </div>
+                      )
+                    }
                     return (
                       <div key={f.key} className={f.type === 'textarea' ? 'sm:col-span-2 flex flex-col gap-1' : 'flex flex-col gap-1'}>
                         <label className="font-bold text-stone-600 block mb-1">
@@ -605,7 +773,7 @@ const SrmdSheetView = React.forwardRef<SrmdSheetViewHandle, { slug: string }>(fu
                         <FormField
                           field={f}
                           value={formData[f.key] ?? ''}
-                          onChange={val => setFormData(p => ({ ...p, [f.key]: val }))}
+                          onChange={val => setFormData(p => withDerivedMonthKeys({ ...p, [f.key]: val }, config.fields))}
                           optionSets={optionSets}
                           customValues={customValues}
                           canAddOption={canEdit}
@@ -618,7 +786,7 @@ const SrmdSheetView = React.forwardRef<SrmdSheetViewHandle, { slug: string }>(fu
                 </div>
 
                 <div className="flex justify-end gap-2.5 pt-2 border-t border-stone-200">
-                  <button type="button" onClick={() => setFormOpen(false)} className="px-4 py-2 bg-stone-100 hover:bg-stone-200 text-stone-800 font-bold rounded-lg cursor-pointer transition-colors">
+                  <button type="button" onClick={() => { setFormOpen(false); setFormError(null) }} className="px-4 py-2 bg-stone-100 hover:bg-stone-200 text-stone-800 font-bold rounded-lg cursor-pointer transition-colors">
                     Cancel
                   </button>
                   <button

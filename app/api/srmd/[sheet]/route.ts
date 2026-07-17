@@ -6,6 +6,33 @@ import { canEditCollections } from '@/lib/require-edit'
 
 const DENIED = NextResponse.json({ error: 'Access Denied' }, { status: 403 })
 
+function isDuplicateKeyError(err: unknown): boolean {
+  return typeof err === 'object' && err !== null && (err as { code?: number }).code === 11000
+}
+
+// Checks each of config.uniqueFields individually — a match on ANY one of them means
+// the save must be rejected. excludeId lets PATCH ignore the record being edited.
+async function findDuplicateField(
+  db: Awaited<ReturnType<typeof getDb>>,
+  config: NonNullable<ReturnType<typeof getSrmdSheet>>,
+  body: Record<string, unknown>,
+  excludeId?: string
+): Promise<string | null> {
+  for (const field of config.uniqueFields ?? []) {
+    const value = body[field]
+    if (typeof value !== 'string' || !value.trim()) continue
+    const filter: Record<string, unknown> = { [field]: value.trim() }
+    if (excludeId) filter._id = { $ne: new ObjectId(excludeId) }
+    const existing = await db.collection(config.collection).findOne(filter)
+    if (existing) return field
+  }
+  return null
+}
+
+function duplicateFieldMessage(field: string, value: unknown): string {
+  return `${field.replace(/_/g, ' ')} "${String(value).trim()}" already exists. IDs must be unique.`
+}
+
 export async function GET(req: NextRequest, { params }: { params: Promise<{ sheet: string }> }) {
   const { sheet } = await params
   const config = getSrmdSheet(sheet)
@@ -62,9 +89,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ she
 
   const body = await req.json()
   const db = await getDb()
+
+  const dupField = await findDuplicateField(db, config, body)
+  if (dupField) {
+    return NextResponse.json({ error: duplicateFieldMessage(dupField, body[dupField]) }, { status: 409 })
+  }
+
   const now = new Date()
-  const result = await db.collection(config.collection).insertOne({ ...body, imported_at: now, updated_at: now })
-  return NextResponse.json({ ok: true, id: result.insertedId })
+  try {
+    const result = await db.collection(config.collection).insertOne({ ...body, imported_at: now, updated_at: now })
+    return NextResponse.json({ ok: true, id: result.insertedId })
+  } catch (err) {
+    if (isDuplicateKeyError(err)) {
+      return NextResponse.json({ error: 'That ID already exists. IDs must be unique.' }, { status: 409 })
+    }
+    throw err
+  }
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ sheet: string }> }) {
@@ -79,11 +119,24 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ sh
 
   const body = await req.json()
   const db = await getDb()
-  await db.collection(config.collection).updateOne(
-    { _id: new ObjectId(id) },
-    { $set: { ...body, updated_at: new Date() } }
-  )
-  return NextResponse.json({ ok: true })
+
+  const dupField = await findDuplicateField(db, config, body, id)
+  if (dupField) {
+    return NextResponse.json({ error: duplicateFieldMessage(dupField, body[dupField]) }, { status: 409 })
+  }
+
+  try {
+    await db.collection(config.collection).updateOne(
+      { _id: new ObjectId(id) },
+      { $set: { ...body, updated_at: new Date() } }
+    )
+    return NextResponse.json({ ok: true })
+  } catch (err) {
+    if (isDuplicateKeyError(err)) {
+      return NextResponse.json({ error: 'That ID already exists. IDs must be unique.' }, { status: 409 })
+    }
+    throw err
+  }
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ sheet: string }> }) {

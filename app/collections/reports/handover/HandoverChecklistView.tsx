@@ -101,7 +101,7 @@ const HandoverChecklistView = forwardRef<HandoverChecklistViewHandle>(function H
             <Loader2 className="w-5 h-5 animate-spin mr-2" /> Loading checklist…
           </div>
         ) : (
-          <div className="print-sheet bg-white border border-[#E8E3DB] rounded-xl overflow-hidden">
+          <div className="print-sheet bg-white border border-[#E8E3DB] rounded-xl overflow-hidden shadow-[0_4px_16px_rgba(27,58,46,0.08)]">
             <div className="bg-[#1B3A2E] text-white px-6 py-3">
               <h2 className="font-serif text-lg font-bold">SRMD Collection Assessment · Handover Checklist</h2>
             </div>

@@ -126,7 +126,7 @@ const TreatmentSheetView = forwardRef<TreatmentSheetViewHandle>(function Treatme
         )}
 
         {bundle && (
-          <div className="print-sheet bg-white border border-[#E8E3DB] rounded-xl overflow-hidden">
+          <div className="print-sheet bg-white border border-[#E8E3DB] rounded-xl overflow-hidden shadow-[0_4px_16px_rgba(27,58,46,0.08)]">
             <div className="bg-[#1B3A2E] text-white px-6 py-4">
               <h2 className="font-serif text-lg font-bold">SRMD · Treatment / Rehousing Sheet</h2>
               <p className="text-[10px] font-mono text-white/70 mt-1 uppercase tracking-wider">Treatment ID: {bundle.treatment.Treatment_ID}</p>
