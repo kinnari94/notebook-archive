@@ -1,7 +1,7 @@
 'use client'
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react'
 import { useSession } from 'next-auth/react'
-import { Download, Loader2 } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import { HANDOVER_STATUS_OPTIONS } from '@/lib/handover-checklist'
 import { hasEditAccess, type ViewPermissions } from '@/lib/permissions'
 import { useDropdownOptions } from '@/lib/useDropdownOptions'
@@ -15,7 +15,11 @@ interface ChecklistRow {
   notes: string
 }
 
-export default function HandoverChecklistView() {
+export interface HandoverChecklistViewHandle {
+  downloadPdf: () => void
+}
+
+const HandoverChecklistView = forwardRef<HandoverChecklistViewHandle>(function HandoverChecklistView(_props, ref) {
   const { data: session } = useSession()
   const role = (session?.user as { role?: string } | undefined)?.role
   const permissions = (session?.user as { permissions?: ViewPermissions | null } | undefined)?.permissions
@@ -53,7 +57,7 @@ export default function HandoverChecklistView() {
     }
   }
 
-  const handleDownloadPdf = () => {
+  const handleDownloadPdf = useCallback(() => {
     const element = document.querySelector('.print-sheet') as HTMLElement | null
     if (element) {
       import('html2pdf.js').then(html2pdf => {
@@ -67,7 +71,9 @@ export default function HandoverChecklistView() {
         html2pdf.default().from(element).set(opt).save()
       })
     }
-  }
+  }, [])
+
+  useImperativeHandle(ref, () => ({ downloadPdf: handleDownloadPdf }), [handleDownloadPdf])
 
   const doneCount = rows.filter(r => r.status === 'Done').length
 
@@ -81,17 +87,6 @@ export default function HandoverChecklistView() {
           select, input { border: none !important; background: transparent !important; }
         }
       `}</style>
-
-      <header className="bg-white py-4 px-6 sticky top-0 z-30 border-b border-[#E8E3DB] no-print">
-        <div className="flex items-center justify-end">
-          <button
-            onClick={handleDownloadPdf}
-            className="flex items-center gap-2 px-4 py-2 bg-[#1B3A2E] hover:bg-[#2D5C45] text-white text-xs font-semibold rounded-lg transition-all"
-          >
-            <Download className="w-3.5 h-3.5" /> Download PDF
-          </button>
-        </div>
-      </header>
 
       <div className="px-6 lg:px-8 py-6 space-y-5">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 no-print">
@@ -187,4 +182,6 @@ export default function HandoverChecklistView() {
       </div>
     </div>
   )
-}
+})
+
+export default HandoverChecklistView

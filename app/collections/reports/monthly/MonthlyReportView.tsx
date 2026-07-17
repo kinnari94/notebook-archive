@@ -1,18 +1,22 @@
 'use client'
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react'
 import { useSession } from 'next-auth/react'
-import { Download, Loader2 } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import { hasEditAccess, type ViewPermissions } from '@/lib/permissions'
 
 interface Row { label: string; count: number }
 interface Section { title: string; rows: Row[] }
 interface ReportData { month: string; sections: Section[]; notes: string }
 
+export interface MonthlyReportViewHandle {
+  downloadPdf: () => void
+}
+
 function defaultMonth(): string {
   return new Date().toISOString().slice(0, 7)
 }
 
-export default function MonthlyReportView() {
+const MonthlyReportView = forwardRef<MonthlyReportViewHandle>(function MonthlyReportView(_props, ref) {
   const { data: session } = useSession()
   const role = (session?.user as { role?: string } | undefined)?.role
   const permissions = (session?.user as { permissions?: ViewPermissions | null } | undefined)?.permissions
@@ -48,7 +52,7 @@ export default function MonthlyReportView() {
     }
   }
 
-  const handleDownloadPdf = () => {
+  const handleDownloadPdf = useCallback(() => {
     const element = document.querySelector('.print-sheet') as HTMLElement
     if (element) {
       import('html2pdf.js').then(html2pdf => {
@@ -62,7 +66,9 @@ export default function MonthlyReportView() {
         html2pdf.default().from(element).set(opt).save()
       })
     }
-  }
+  }, [month])
+
+  useImperativeHandle(ref, () => ({ downloadPdf: handleDownloadPdf }), [handleDownloadPdf])
 
   return (
     <div className="min-h-screen bg-[#F7F3ED] text-[#1B3A2E] pb-16 font-sans">
@@ -73,17 +79,6 @@ export default function MonthlyReportView() {
           .print-sheet { box-shadow: none !important; border: none !important; }
         }
       `}</style>
-
-      <header className="bg-white py-4 px-6 sticky top-0 z-30 border-b border-[#E8E3DB] no-print">
-        <div className="flex items-center justify-end">
-          <button
-            onClick={handleDownloadPdf}
-            className="flex items-center gap-2 px-4 py-2 bg-[#1B3A2E] hover:bg-[#2D5C45] text-white text-xs font-semibold rounded-lg transition-all"
-          >
-            <Download className="w-3.5 h-3.5" /> Download PDF
-          </button>
-        </div>
-      </header>
 
       <div className="px-6 lg:px-8 py-6 space-y-5 max-w-3xl">
         <div className="flex items-center gap-3 no-print">
@@ -144,4 +139,6 @@ export default function MonthlyReportView() {
       </div>
     </div>
   )
-}
+})
+
+export default MonthlyReportView

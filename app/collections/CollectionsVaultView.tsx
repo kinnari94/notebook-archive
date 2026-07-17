@@ -1,25 +1,30 @@
 'use client'
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
-import { Package, Plus } from 'lucide-react'
+import { Package, Plus, Download } from 'lucide-react'
 import { SRMD_NAV, getSrmdSheet } from '@/lib/srmd-sheets'
 import { hasEditAccess, type ViewPermissions } from '@/lib/permissions'
 import SrmdSheetView, { type SrmdSheetViewHandle } from './[slug]/SrmdSheetView'
 import DashboardView from './dashboard/DashboardView'
-import MonthlyReportView from './reports/monthly/MonthlyReportView'
-import TreatmentSheetView from './reports/treatment-sheet/TreatmentSheetView'
-import HandoverChecklistView from './reports/handover/HandoverChecklistView'
+import MonthlyReportView, { type MonthlyReportViewHandle } from './reports/monthly/MonthlyReportView'
+import TreatmentSheetView, { type TreatmentSheetViewHandle } from './reports/treatment-sheet/TreatmentSheetView'
+import HandoverChecklistView, { type HandoverChecklistViewHandle } from './reports/handover/HandoverChecklistView'
 
 const SHEET_SLUGS = new Set([
   'inventory', 'condition', 'risk-priority', 'location-storage',
   'photo-log', 'environment', 'treatments', 'change-log',
 ])
 
+const DOWNLOAD_TABS = new Set(['reports/monthly', 'reports/treatment-sheet', 'reports/handover'])
+
 const TABS = SRMD_NAV.filter(t => t.slug !== 'readme')
 
 export default function CollectionsVaultView() {
   const [activeTab, setActiveTab] = useState('dashboard')
   const sheetViewRef = useRef<SrmdSheetViewHandle>(null)
+  const monthlyReportRef = useRef<MonthlyReportViewHandle>(null)
+  const treatmentSheetRef = useRef<TreatmentSheetViewHandle>(null)
+  const handoverChecklistRef = useRef<HandoverChecklistViewHandle>(null)
   const tabScrollRef = useRef<HTMLDivElement>(null)
   const [canScrollLeft, setCanScrollLeft] = useState(false)
   const [canScrollRight, setCanScrollRight] = useState(false)
@@ -43,13 +48,20 @@ export default function CollectionsVaultView() {
   const canEdit = hasEditAccess(role, permissions, 'collections')
 
   const canAddOnActiveTab = canEdit && SHEET_SLUGS.has(activeTab)
+  const canDownloadOnActiveTab = DOWNLOAD_TABS.has(activeTab)
   const activeConfig = SHEET_SLUGS.has(activeTab) ? getSrmdSheet(activeTab) : undefined
+
+  function handleDownloadPdf() {
+    if (activeTab === 'reports/monthly') monthlyReportRef.current?.downloadPdf()
+    else if (activeTab === 'reports/treatment-sheet') treatmentSheetRef.current?.downloadPdf()
+    else if (activeTab === 'reports/handover') handoverChecklistRef.current?.downloadPdf()
+  }
 
   function renderActive() {
     if (activeTab === 'dashboard') return <DashboardView />
-    if (activeTab === 'reports/monthly') return <MonthlyReportView />
-    if (activeTab === 'reports/treatment-sheet') return <TreatmentSheetView />
-    if (activeTab === 'reports/handover') return <HandoverChecklistView />
+    if (activeTab === 'reports/monthly') return <MonthlyReportView ref={monthlyReportRef} />
+    if (activeTab === 'reports/treatment-sheet') return <TreatmentSheetView ref={treatmentSheetRef} />
+    if (activeTab === 'reports/handover') return <HandoverChecklistView ref={handoverChecklistRef} />
     if (SHEET_SLUGS.has(activeTab)) return <SrmdSheetView slug={activeTab} ref={sheetViewRef} />
     return null
   }
@@ -80,6 +92,16 @@ export default function CollectionsVaultView() {
             >
               <Plus className="w-4 h-4" />
               Add {activeConfig?.label ?? 'Entry'}
+            </button>
+          )}
+
+          {canDownloadOnActiveTab && (
+            <button
+              onClick={handleDownloadPdf}
+              className="px-4 py-2.5 bg-[#1B3A2E] hover:bg-[#2D5C45] text-white text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 shrink-0"
+            >
+              <Download className="w-4 h-4" />
+              Download PDF
             </button>
           )}
         </div>

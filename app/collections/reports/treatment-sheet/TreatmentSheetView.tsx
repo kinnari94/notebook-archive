@@ -1,6 +1,6 @@
 'use client'
-import React, { useState, useEffect, useCallback } from 'react'
-import { Download, Loader2 } from 'lucide-react'
+import React, { useState, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react'
+import { Loader2 } from 'lucide-react'
 
 interface TreatmentDoc { Treatment_ID: string; Object_ID?: string; Action_Type?: string; [k: string]: unknown }
 interface Bundle {
@@ -27,7 +27,11 @@ function Row({ label, value }: { label: string; value: unknown }) {
   )
 }
 
-export default function TreatmentSheetView() {
+export interface TreatmentSheetViewHandle {
+  downloadPdf: () => void
+}
+
+const TreatmentSheetView = forwardRef<TreatmentSheetViewHandle>(function TreatmentSheetView(_props, ref) {
   const [allTreatments, setAllTreatments] = useState<TreatmentDoc[]>([])
   const [treatmentsLoading, setTreatmentsLoading] = useState(true)
   const [treatmentId, setTreatmentId] = useState<string>('')
@@ -70,6 +74,7 @@ export default function TreatmentSheetView() {
     }
   }, [bundle])
 
+  useImperativeHandle(ref, () => ({ downloadPdf: handleDownloadPdf }), [handleDownloadPdf])
 
   return (
     <div className="min-h-screen bg-[#F7F3ED] text-[#1B3A2E] pb-16 font-sans">
@@ -80,19 +85,6 @@ export default function TreatmentSheetView() {
           .print-sheet { box-shadow: none !important; border: none !important; }
         }
       `}</style>
-
-      <header className="bg-white py-4 px-6 sticky top-0 z-30 border-b border-[#E8E3DB] no-print">
-        <div className="flex items-center justify-end">
-          {bundle && (
-            <button
-              onClick={handleDownloadPdf}
-              className="flex items-center gap-2 px-4 py-2 bg-[#1B3A2E] hover:bg-[#2D5C45] text-white text-xs font-semibold rounded-lg transition-all"
-            >
-              <Download className="w-3.5 h-3.5" /> Download PDF
-            </button>
-          )}
-        </div>
-      </header>
 
       <div className="px-6 lg:px-8 py-6 space-y-5 max-w-2xl">
         {/* Treatment ID selector — a real dropdown populated from Treatment Recommendations,
@@ -186,4 +178,6 @@ export default function TreatmentSheetView() {
       </div>
     </div>
   )
-}
+})
+
+export default TreatmentSheetView
