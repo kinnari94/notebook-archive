@@ -472,13 +472,18 @@ const SrmdSheetView = React.forwardRef<SrmdSheetViewHandle, { slug: string }>(fu
               const badgeVal = config.badgeField ? item[config.badgeField] : null
               const bMeta = badgeMetaFor(config.badgeField, badgeVal)
               return (
-                <div
+                <motion.div
                   key={item._id}
+                  layout
+                  initial={{ opacity: 0, scale: 0.95, filter: 'blur(8px)' }}
+                  animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
+                  transition={{ duration: 0.4, ease: 'circInOut', type: 'spring' }}
+                  whileHover={{ y: -4 }}
                   onClick={() => setSelected(focused ? null : item)}
-                  className={`bg-gradient-to-b from-white to-[#FBF9F5] rounded-xl border transition-all duration-200 cursor-pointer overflow-hidden group flex flex-col justify-between shadow-[0_1px_3px_rgba(27,58,46,0.08),0_1px_2px_rgba(27,58,46,0.05)] ${
+                  className={`bg-white/50 backdrop-blur-sm rounded-xl border transition-shadow duration-200 cursor-pointer overflow-hidden group flex flex-col justify-between shadow-[0_1px_3px_rgba(27,58,46,0.08),0_1px_2px_rgba(27,58,46,0.05)] ${
                     focused
                       ? 'border-[#1B3A2E] ring-1 ring-[#1B3A2E] shadow-[0_8px_24px_rgba(27,58,46,0.16)]'
-                      : 'border-[#E8E3DB]/70 hover:border-[#1B3A2E]/30 hover:shadow-[0_10px_28px_rgba(27,58,46,0.14)] hover:-translate-y-0.5'
+                      : 'border-[#E8E3DB]/70 hover:border-[#1B3A2E]/30 hover:shadow-[0_10px_28px_rgba(27,58,46,0.14)]'
                   }`}
                 >
                   {config.imageField && (
@@ -533,7 +538,7 @@ const SrmdSheetView = React.forwardRef<SrmdSheetViewHandle, { slug: string }>(fu
                       </button>
                     </div>
                   )}
-                </div>
+                </motion.div>
               )
             })}
           </div>

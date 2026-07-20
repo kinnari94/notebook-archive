@@ -15,9 +15,7 @@ const COLLECTION_TYPES = [
   { code: 'OB', label: 'Object' },
 ]
 const PRIORITY_BANDS = ['A – Immediate', 'B – High', 'C – Moderate', 'D – Monitor']
-// Matches the workbook's own Condition Overview panel exactly — it tracks these
-// four states only (no "Good" row), even though Overall_Condition can also be "Good".
-const CONDITIONS = ['Critical', 'Poor', 'Fair', 'Stable']
+const CONDITIONS = ['Critical', 'Poor', 'Fair', 'Good', 'Stable']
 const TREATMENT_STATUSES = ['Proposed', 'Approved', 'In progress', 'Done', 'Deferred']
 
 function fillOrder(agg: { _id: string; count: number }[], order: string[]) {

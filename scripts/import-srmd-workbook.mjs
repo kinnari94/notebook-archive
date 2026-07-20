@@ -5,7 +5,7 @@
  * and the 00_Read_Me content into their own srmd_* collections, keyed for
  * idempotent re-runs (upsert, never duplicate).
  *
- * Usage: node scripts/import-srmd-workbook.mjs
+ * Usage: node scripts/import-srmd-workbook.mjs [path/to/workbook.xlsx]
  */
 
 import { MongoClient } from 'mongodb'
@@ -18,11 +18,9 @@ import { dirname, join } from 'path'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 config({ path: join(__dirname, '..', '.env.local') })
 
-const WORKBOOK_PATH = join(
-  __dirname,
-  '..',
-  '1_SRMD_Collection_Assessment_Workbook_1_edited (version 2) (3).xlsx'
-)
+const WORKBOOK_PATH = process.argv[2]
+  ? join(process.cwd(), process.argv[2])
+  : join(__dirname, '..', '1_SRMD_Collection_Assessment_Workbook_1_edited (version 2) (3).xlsx')
 
 // sheet → { collection, keyFields (primary key columns), fallbackFields (used to
 // derive a stable hash key when the primary key column is blank in the sheet) }
@@ -55,6 +53,32 @@ function hashKey(parts) {
   return createHash('sha1').update(parts.join('|')).digest('hex')
 }
 
+function decodeXmlEntities(s) {
+  return s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'").replace(/&amp;/g, '&')
+}
+
+// Some ID cells carry two runs of rich text in one string: an old ID with
+// strikethrough (superseded), followed by the current ID with no formatting —
+// e.g. "0001-SH-TX-PPG" (struck) + "  PPG-TX-SH-0001" (plain), which XLSX's
+// flattened cell.v concatenates into one garbled string. SheetJS exposes the
+// original run-level XML via cell.r, which lets us drop the struck run and
+// keep only the current, un-struck text.
+function destrikeCellValue(cell) {
+  if (!cell || cell.t !== 's' || typeof cell.r !== 'string' || !cell.r.includes('<strike')) {
+    return cell ? cell.v : null
+  }
+  const kept = [...cell.r.matchAll(/<r>([\s\S]*?)<\/r>/g)]
+    .filter(([, body]) => !/<strike\s*\/?>/.test(body))
+    .map(([, body]) => {
+      const m = /<t[^>]*>([\s\S]*?)<\/t>/.exec(body)
+      return m ? decodeXmlEntities(m[1]) : ''
+    })
+    .join('')
+    .trim()
+  return kept || cell.v // everything struck (shouldn't happen given the pattern seen) — fall back to the raw value
+}
+
 // ── 02–09: row-based data tabs ───────────────────────────────────────────────
 
 function parseDataSheet(wb, { sheet, requiredField }) {
@@ -76,8 +100,9 @@ function parseDataSheet(wb, { sheet, requiredField }) {
     for (let c = 0; c < width; c++) {
       const field = headers[c]
       if (!field) continue
-      const val = row[c]
+      let val = row[c]
       if (isBlank(val)) continue
+      if (typeof val === 'string') val = destrikeCellValue(ws[XLSX.utils.encode_cell({ r, c })])
       doc[field] = val
     }
     if (!Object.keys(doc).length) continue
