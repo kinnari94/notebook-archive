@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth-options'
 import { spawn } from 'child_process'
 import { join } from 'path'
-import { isNlmConnected, setNlmConnected, clearNlmSession } from '@/lib/nlm-session'
+import { setNlmConnected, clearNlmSession } from '@/lib/nlm-session'
 
 const PYTHON = process.platform === 'win32' ? 'python' : 'python3'
 const LOGIN_SCRIPT = join(process.cwd(), 'scripts', 'nlm_login_credentials.py')
@@ -40,14 +40,16 @@ export async function GET() {
   const email = session?.user?.email?.toLowerCase()
   if (!email) return NextResponse.json({ connected: false })
 
-  // Not connected in this session → show login form
-  if (!isNlmConnected(email)) return NextResponse.json({ connected: false })
-
-  // Session says connected — verify credentials still work
+  // Always verify against the real NotebookLM session file, not just the
+  // in-memory flag — that flag resets on every server restart/redeploy even
+  // though the underlying session file can still be valid.
   try {
     const stdout = await runScript([LIST_SCRIPT], 20000)
     const result = JSON.parse(stdout)
-    if (Array.isArray(result)) return NextResponse.json({ connected: true })
+    if (Array.isArray(result)) {
+      setNlmConnected(email)
+      return NextResponse.json({ connected: true })
+    }
     clearNlmSession(email)
     return NextResponse.json({ connected: false })
   } catch {
