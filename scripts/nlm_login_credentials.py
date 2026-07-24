@@ -5,7 +5,6 @@ Prints JSON: {"ok": true} or {"ok": false, "error": "..."}
 """
 import json, sys
 from pathlib import Path
-from urllib.parse import urlparse
 
 if len(sys.argv) < 3:
     print(json.dumps({"ok": False, "error": "Usage: nlm_login_credentials.py <email> <password>"}))
@@ -67,10 +66,7 @@ try:
         )
 
         # If already signed in and redirected to NotebookLM, save state and exit
-        # (checked via hostname, not substring — the initial goto URL's own
-        # ?continue= query param literally contains "notebooklm.google.com"
-        # and would false-positive a naive substring check)
-        if urlparse(page.url).hostname == "notebooklm.google.com":
+        if "notebooklm.google.com" in page.url:
             context.storage_state(path=str(STORAGE_PATH))
             STORAGE_PATH.chmod(0o600)
             context.close()
