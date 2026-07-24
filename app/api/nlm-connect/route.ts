@@ -3,10 +3,9 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth-options'
 import { spawn } from 'child_process'
 import { join } from 'path'
-import { setNlmConnected, clearNlmSession } from '@/lib/nlm-session'
+import { isNlmConnected, setNlmConnected, clearNlmSession } from '@/lib/nlm-session'
 
 const PYTHON = process.platform === 'win32' ? 'python' : 'python3'
-const LOGIN_SCRIPT = join(process.cwd(), 'scripts', 'nlm_login_credentials.py')
 const LIST_SCRIPT  = join(process.cwd(), 'scripts', 'nlm_list.py')
 
 const NOT_AVAILABLE = 'NotebookLM features require a server with Python 3 and Playwright installed. They are not available on Vercel or other serverless platforms.'
@@ -40,9 +39,10 @@ export async function GET() {
   const email = session?.user?.email?.toLowerCase()
   if (!email) return NextResponse.json({ connected: false })
 
-  // Always verify against the real NotebookLM session file, not just the
-  // in-memory flag — that flag resets on every server restart/redeploy even
-  // though the underlying session file can still be valid.
+  // Not connected in this session → show login form
+  if (!isNlmConnected(email)) return NextResponse.json({ connected: false })
+
+  // Session says connected — verify the underlying session file still works
   try {
     const stdout = await runScript([LIST_SCRIPT], 20000)
     const result = JSON.parse(stdout)
@@ -85,12 +85,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: 'Incorrect password.' }, { status: 403 })
   }
 
+  // Google blocks the in-app Playwright sign-in from this server's IP every
+  // time, regardless of credentials — so a real session can only come from
+  // an out-of-band login (done elsewhere, uploaded to the server). Once the
+  // shared password checks out above, just confirm that session is still
+  // valid and gate this user's access behind it.
   try {
-    const stdout = await runScript([LOGIN_SCRIPT, nlmEmail, nlmPassword], 90000)
+    const stdout = await runScript([LIST_SCRIPT], 20000)
     const result = JSON.parse(stdout)
-    if (result.ok) setNlmConnected(email)
-    return NextResponse.json(result)
-  } catch (e) {
-    return NextResponse.json({ ok: false, error: String(e) })
+    if (Array.isArray(result)) {
+      setNlmConnected(email)
+      return NextResponse.json({ ok: true })
+    }
+    return NextResponse.json({ ok: false, error: 'No valid NotebookLM session on the server — it needs to be re-established manually.' })
+  } catch {
+    return NextResponse.json({ ok: false, error: 'No valid NotebookLM session on the server — it needs to be re-established manually.' })
   }
 }
