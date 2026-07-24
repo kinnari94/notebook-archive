@@ -7,7 +7,6 @@
 # NotebookLM auth — personal session data, never commit
 .notebooklm_cookie
 .notebooklm_storage.json
-scripts/nlm_login_credentials.py
 
 # Next.js
 .next/
