@@ -505,23 +505,23 @@ const SrmdSheetView = React.forwardRef<SrmdSheetViewHandle, { slug: string }>(fu
                   )}
                   <div className="p-4 space-y-2.5 flex-1">
                     <div className="flex items-start justify-between gap-2">
-                      <h4 className="font-serif font-normal text-stone-900 text-[13px] sm:text-sm leading-snug group-hover:text-stone-700 transition-colors">
+                      <h4 className="font-serif font-normal text-stone-900 text-base sm:text-lg leading-snug group-hover:text-stone-700 transition-colors">
                         {formatVal(item[config.titleField])}
                       </h4>
                       {badgeVal != null && badgeVal !== '' && (
-                        <span className={`shrink-0 px-2 py-0.5 rounded font-mono text-[9px] font-semibold uppercase tracking-wider border ${bMeta?.badge || 'bg-gray-50 text-gray-700 border-gray-200'}`}>
+                        <span className={`shrink-0 px-2 py-0.5 rounded font-mono text-[11px] font-semibold uppercase tracking-wider border ${bMeta?.badge || 'bg-gray-50 text-gray-700 border-gray-200'}`}>
                           {String(badgeVal)}
                         </span>
                       )}
                     </div>
                     {config.subtitleField && (
-                      <p className="text-stone-500 text-[11px] font-mono">{formatVal(item[config.subtitleField])}</p>
+                      <p className="text-stone-500 text-sm font-mono">{formatVal(item[config.subtitleField])}</p>
                     )}
                     {chipColumns.length > 0 && (
-                      <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 pt-2.5 mt-1 border-t border-stone-100 text-[11px]">
+                      <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 pt-2.5 mt-1 border-t border-stone-100 text-sm">
                         {chipColumns.map(c => (
                           <div key={c.key} className="min-w-0 overflow-hidden">
-                            <span className="text-stone-400 text-[9px] uppercase font-mono block">{c.label}</span>
+                            <span className="text-stone-400 text-[11px] uppercase font-mono block">{c.label}</span>
                             <span className="text-stone-700 font-medium truncate block">{formatVal(item[c.key])}</span>
                           </div>
                         ))}
@@ -603,14 +603,14 @@ const SrmdSheetView = React.forwardRef<SrmdSheetViewHandle, { slug: string }>(fu
                 </div>
               )}
               <div className="bg-[#FAF8F5]/90 border border-stone-200 rounded-xl p-4 space-y-3 shadow-[0_1px_3px_rgba(27,58,46,0.05)]">
-                <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
+                <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
                   {config.fields.filter(f => f.type !== 'image' && f.type !== 'hidden' && selected[f.key] != null && selected[f.key] !== '').map(f => (
                     <div key={f.key} className={f.type === 'textarea' ? 'col-span-2' : 'min-w-0 overflow-hidden'}>
-                      <span className="text-[9px] font-mono text-stone-400 block uppercase font-bold">{f.label}:</span>
+                      <span className="text-[11px] font-mono text-stone-400 block uppercase font-bold">{f.label}:</span>
                       {f.type === 'textarea' ? (
-                        <p className="text-stone-600 text-[11px] leading-relaxed bg-white p-2.5 rounded-lg border border-stone-200 mt-1 break-words">{formatVal(selected[f.key])}</p>
+                        <p className="text-stone-600 text-sm leading-relaxed bg-white p-2.5 rounded-lg border border-stone-200 mt-1 break-words">{formatVal(selected[f.key])}</p>
                       ) : (
-                        <span className="font-medium text-stone-800 mt-0.5 block break-words text-[11px]">{formatVal(selected[f.key])}</span>
+                        <span className="font-medium text-stone-800 mt-0.5 block break-words text-sm">{formatVal(selected[f.key])}</span>
                       )}
                     </div>
                   ))}
@@ -623,11 +623,11 @@ const SrmdSheetView = React.forwardRef<SrmdSheetViewHandle, { slug: string }>(fu
                 if (!extra.length) return null
                 return (
                   <div className="bg-[#FAF8F5]/90 border border-stone-200 rounded-xl p-4 space-y-3 shadow-[0_1px_3px_rgba(27,58,46,0.05)]">
-                    <span className="text-[9px] font-mono font-bold text-stone-500 uppercase tracking-wider block">📋 Additional Fields</span>
-                    <div className="grid grid-cols-2 gap-3 text-xs">
+                    <span className="text-[11px] font-mono font-bold text-stone-500 uppercase tracking-wider block">📋 Additional Fields</span>
+                    <div className="grid grid-cols-2 gap-3 text-sm">
                       {extra.map(([k, v]) => (
                         <div key={k} className="min-w-0 overflow-hidden">
-                          <span className="text-[9px] font-mono text-stone-400 block uppercase font-bold truncate">{humanize(k)}:</span>
+                          <span className="text-[11px] font-mono text-stone-400 block uppercase font-bold truncate">{humanize(k)}:</span>
                           <span className="font-medium text-stone-800 mt-0.5 block break-words">{formatVal(v)}</span>
                         </div>
                       ))}

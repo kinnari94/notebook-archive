@@ -1,5 +1,7 @@
+import { requireViewAccess } from '@/lib/require-view'
 import CollectionsVaultView from './CollectionsVaultView'
 
-export default function CollectionsPage() {
+export default async function CollectionsPage() {
+  await requireViewAccess('collections')
   return <CollectionsVaultView />
 }

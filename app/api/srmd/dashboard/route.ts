@@ -35,7 +35,7 @@ export async function GET() {
   const [
     totalRecords, photosLogged,
     conditionAgg, priorityAgg, collectionTypeAgg, treatmentStatusAgg,
-    conditionsDoneCount, criticalObjects, completeCount, envAlertsCount, immediateActions, treatmentsPending,
+    conditionsDoneCount, criticalObjects, completeCount, envAlertsCount, immediateStabilizationCount, treatmentsImmediateNotDone, treatmentsPending,
     missingObjectName, missingLocation,
     objectsWithoutConditionAgg, photosMissingObjectId,
     environmentalAlertRows,
@@ -58,7 +58,10 @@ export async function GET() {
     inv.countDocuments({ Survey_Status: 'Complete' }),
     // Env Alerts            =COUNTIF('07_Environment_Summary'!$Q$3:$Q$52,"Action")
     env.countDocuments({ Alert_Flag: 'Action' }),
-    // Immediate Actions     =COUNTIFS('08_Treatment_Recommendations'!$F$3:$F$102,"Immediate",$J$3:$J$102,"<>Done")
+    // Immediate Actions     =COUNTIF('03_Condition_Assess'!$Q$3:$Q$153,"Yes")
+    cond.countDocuments({ Immediate_Stabilization_Needed: 'Yes' }),
+    // Treatments Immediate & not Done (data-quality check, distinct from the stat above)
+    //   =COUNTIFS('08_Treatment_Recommendations'!$F$3:$F$102,"Immediate",$J$3:$J$102,"<>Done")
     treat.countDocuments({ Action_Level: 'Immediate', Approval_Status: { $ne: 'Done' } }),
     // Treatments Pending    =COUNTIF('08_Treatment_Recommendations'!$J$3:$J$102,"Proposed")
     treat.countDocuments({ Approval_Status: 'Proposed' }),
@@ -101,7 +104,7 @@ export async function GET() {
       totalRecords,
       pctConditionsDone: pct(conditionsDoneCount),
       pctComplete: pct(completeCount),
-      immediateActions,
+      immediateActions: immediateStabilizationCount,
       criticalObjects,
       envAlerts: envAlertsCount,
       photosLogged,
@@ -116,7 +119,7 @@ export async function GET() {
       { label: 'Records missing Location',            count: missingLocation,                         status: missingLocation === 0 ? 'ok' : 'review' },
       { label: 'Objects without any condition record', count: objectsWithoutConditionAgg[0]?.n || 0,   status: (objectsWithoutConditionAgg[0]?.n || 0) === 0 ? 'ok' : 'review' },
       { label: 'Photos without Object_ID match',       count: photosMissingObjectId,                   status: photosMissingObjectId === 0 ? 'ok' : 'review' },
-      { label: 'Treatments Immediate & not Done',      count: immediateActions,                        status: immediateActions === 0 ? 'ok' : 'review' },
+      { label: 'Treatments Immediate & not Done',      count: treatmentsImmediateNotDone,              status: treatmentsImmediateNotDone === 0 ? 'ok' : 'review' },
     ],
     environmentalAlerts: environmentalAlertRows ? [environmentalAlertRows] : [],
     sheets: sheetCounts,

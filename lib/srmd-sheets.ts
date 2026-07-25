@@ -12,7 +12,7 @@ import {
 import {
   THRESHOLD_PROFILE_OPTIONS, ASSESSMENT_TYPE_OPTIONS, BACKGROUND_OPTIONS, SHOT_PURPOSE_OPTIONS,
   PHOTO_RIGHTS_OPTIONS, APPROVAL_STATUS_OPTIONS, ACTION_LEVEL_OPTIONS, ACTION_TYPE_OPTIONS,
-  CHANGE_LOG_ACTION_TYPE_OPTIONS, SHEET_NAME_OPTIONS,
+  CHANGE_LOG_ACTION_TYPE_OPTIONS, SHEET_NAME_OPTIONS, RECORD_LEVEL_2_OPTIONS,
 } from '@/lib/dropdown-option-sets'
 
 export interface SrmdColumn {
@@ -97,7 +97,8 @@ export const SRMD_SHEETS: SrmdSheetConfig[] = [
     ],
     fields: [
       t('Object_ID', 'Object ID'), t('Parent_ID', 'Parent ID'),
-      sel('Record_Level', 'Record Level', RECORD_LEVEL_OPTIONS, 'RECORD_LEVEL'),
+      sel('Record_Level_1', 'Record Level 1', RECORD_LEVEL_OPTIONS, 'RECORD_LEVEL'),
+      sel('Record_Level_2', 'Record Level 2', RECORD_LEVEL_2_OPTIONS, 'RECORD_LEVEL_2'),
       sel('Collection_Type', 'Collection Type', COLLECTION_TYPE_OPTIONS, 'COLLECTION_TYPE'),
       t('Object_Name', 'Object Name'), t('Alternate_Title', 'Alternate Title'),
       ta('Brief_Description', 'Brief Description'),

@@ -33,6 +33,16 @@ export const ASSESSMENT_TYPE_OPTIONS: Option[] = [
   { value: 'Post-Stabilization', label: 'Post-Stabilization' },
 ]
 
+// Sub-classification under Record_Level_1 for paper-based series (e.g. Inventory
+// Master's "SERIES" rows) — first seen in the 02_Inventory_Master re-import, no
+// named lookup table for it in 01_Lists_Config, so kept user-extensible like the
+// other combo fields below.
+export const RECORD_LEVEL_2_OPTIONS: Option[] = [
+  { value: 'HANDWRITTEN', label: 'Handwritten' },
+
+  { value: 'PRINTED',     label: 'Printed' },
+]
+
 // None of these three have a named lookup table in 01_Lists_Config.
 export const BACKGROUND_OPTIONS: Option[] = [
   { value: 'Black', label: 'Black' },
@@ -100,6 +110,7 @@ export const DAMAGE_TERM_OPTIONS: Option[] = ALL_DAMAGE_TERMS.map(v => ({ value:
 // Handover Checklist's Status field) can reference.
 export const STATIC_OPTION_SETS: Record<string, Option[]> = {
   RECORD_LEVEL: RECORD_LEVEL_OPTIONS,
+  RECORD_LEVEL_2: RECORD_LEVEL_2_OPTIONS,
   COLLECTION_TYPE: COLLECTION_TYPE_OPTIONS,
   ACCESS_LEVEL: ACCESS_LEVEL_OPTIONS,
   SURVEY_STATUS: SURVEY_STATUS_OPTIONS,

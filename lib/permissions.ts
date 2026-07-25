@@ -51,3 +51,31 @@ export function hasEditAccess(
   if (permissions == null) return true
   return permissions[viewKey] === 'edit'
 }
+
+// Same shape as hasEditAccess, but for read access to a whole view/page — 'view' or
+// 'edit' both count, only 'no_access' (or an explicit no_access default for a key
+// missing from an older/partial permissions record) shuts a view out.
+export function hasViewAccess(
+  role: string | null | undefined,
+  permissions: ViewPermissions | null | undefined,
+  viewKey: string
+): boolean {
+  if (role === 'admin') return true
+  if (permissions == null) return true
+  return permissions[viewKey] !== 'no_access'
+}
+
+// Nav routes in Sidebar order — used to pick a sensible landing page for a guest
+// whose account can't see /dashboard (login always sends there first). 'settings'
+// is a permission key but has no page of its own, so it's excluded here.
+const ROUTABLE_VIEWS = ['dashboard', 'collections', 'browse', 'search', 'timeline', 'extract'] as const
+
+export function firstAccessibleView(
+  role: string | null | undefined,
+  permissions: ViewPermissions | null | undefined
+): string | null {
+  for (const key of ROUTABLE_VIEWS) {
+    if (hasViewAccess(role, permissions, key)) return key
+  }
+  return null
+}

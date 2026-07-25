@@ -5,6 +5,7 @@ import { signOut } from 'next-auth/react'
 import {
   LayoutDashboard, BookOpen, Search, Clock, FlaskConical, Archive, LogOut, Package, Users,
 } from 'lucide-react'
+import { hasViewAccess, type ViewPermissions } from '@/lib/permissions'
 
 const nav = [
   { href: '/dashboard',   label: 'Dashboard',   icon: LayoutDashboard, viewKey: 'dashboard' },
@@ -19,7 +20,7 @@ const nav = [
 interface User {
   email?: string | null
   role?: string | null
-  permissions?: Record<string, string> | null
+  permissions?: ViewPermissions | null
 }
 
 export default function Sidebar({ user }: { user?: User }) {
@@ -28,9 +29,7 @@ export default function Sidebar({ user }: { user?: User }) {
 
   const visibleNav = nav.filter(({ viewKey }) => {
     if (viewKey === 'users') return isAdmin
-    if (isAdmin) return true
-    // For guests, hide views set to no_access (default to show if no permission record)
-    return user?.permissions?.[viewKey] !== 'no_access'
+    return hasViewAccess(user?.role, user?.permissions, viewKey)
   })
 
   return (

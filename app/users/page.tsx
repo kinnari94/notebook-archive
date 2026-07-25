@@ -6,6 +6,6 @@ import UsersClient from './UsersClient'
 export default async function UsersPage() {
   const session = await getServerSession(authOptions)
   if (!session?.user) redirect('/login')
-  if ((session.user as any).role !== 'admin') redirect('/dashboard')
+  if ((session.user as any).role !== 'admin') redirect('/no-access')
   return <UsersClient currentEmail={session.user.email ?? ''} />
 }
