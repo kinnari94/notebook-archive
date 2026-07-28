@@ -31,7 +31,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 permissions: (session.user as any).permissions,
               }} />
             )}
-            <main className={session?.user ? 'ml-60 min-h-screen' : 'min-h-screen'}>
+            <main className={session?.user ? 'pt-14 md:pt-0 md:ml-60 min-h-screen' : 'min-h-screen'}>
               {children}
             </main>
             <ExtractionBar />

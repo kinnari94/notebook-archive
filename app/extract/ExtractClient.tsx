@@ -128,9 +128,9 @@ export default function ExtractClient() {
   const bkOnly = hasBK && !hasStandard
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-8">
       <div className="mb-8">
-        <h1 className="font-serif text-3xl font-bold text-[#1C3D27]">Extract Content</h1>
+        <h1 className="font-serif text-2xl sm:text-3xl font-bold text-[#1C3D27]">Extract Content</h1>
         <p className="text-muted text-sm mt-1">Pull incidents from NotebookLM into the archive</p>
       </div>
 
@@ -141,7 +141,7 @@ export default function ExtractClient() {
       )}
 
       {!nlmChecking && !nlmConnected && (
-        <div className="bg-white border border-amber-200 rounded-2xl p-8 mb-8 max-w-md">
+        <div className="bg-white border border-amber-200 rounded-2xl p-6 sm:p-8 mb-8 max-w-md">
           <div className="flex items-center gap-3 mb-6">
             <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center">
               <KeyRound className="w-5 h-5 text-amber-600" />
@@ -208,7 +208,7 @@ export default function ExtractClient() {
 
       {nlmConnected && (
         <>
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
             <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2">
               <CheckCircle className="w-4 h-4 text-emerald-600" />
               <span className="text-sm text-emerald-700 font-medium">NotebookLM connected</span>
@@ -318,11 +318,11 @@ export default function ExtractClient() {
           {/* Log */}
           {(logs.length > 0 || running) && (
             <div className="bg-forest rounded-2xl overflow-hidden">
-              <div className="flex items-center gap-2 px-5 py-3 border-b border-forest-light">
+              <div className="flex flex-wrap items-center gap-2 px-4 sm:px-5 py-3 border-b border-forest-light">
                 <span className="text-sm font-medium text-white">Extraction Log</span>
                 {progress && (
-                  <div className="flex items-center gap-3 ml-4">
-                    <div className="h-1.5 w-32 bg-forest-light rounded-full overflow-hidden">
+                  <div className="flex items-center gap-3 sm:ml-4">
+                    <div className="h-1.5 w-20 sm:w-32 bg-forest-light rounded-full overflow-hidden">
                       <div className="h-full bg-mint rounded-full transition-all" style={{ width: `${(progress.done / progress.total) * 100}%` }} />
                     </div>
                     <span className="text-xs text-green-300">{progress.done}/{progress.total}</span>

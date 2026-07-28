@@ -163,9 +163,9 @@ export default function SearchClient() {
   const totalPages = Math.ceil(results.total / PAGE_SIZE)
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-8">
       <div className="mb-8">
-        <h1 className="font-serif text-3xl font-bold text-[#1C3D27] mb-1">Search Archive</h1>
+        <h1 className="font-serif text-2xl sm:text-3xl font-bold text-[#1C3D27] mb-1">Search Archive</h1>
         <p className="text-muted text-sm">Search extracted records or query notebooks directly</p>
       </div>
 
@@ -185,8 +185,8 @@ export default function SearchClient() {
       {mode === 'archive' && (
         <>
           <form onSubmit={e => { e.preventDefault(); doSearch(input) }} className="mb-6">
-            <div className="flex gap-3">
-              <div className="flex-1 relative">
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="flex-1 relative min-w-0">
                 <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
                 <input value={input} onChange={e => setInput(e.target.value)}
                   placeholder="Search incidents, people, places…"
@@ -198,16 +198,18 @@ export default function SearchClient() {
                   </button>
                 )}
               </div>
-              <button type="submit"
-                className="px-6 py-3 bg-ember text-white rounded-2xl text-sm font-semibold hover:bg-orange-600 transition-colors">
-                Search
-              </button>
-              {searched && (
-                <button type="button" onClick={clearSearch}
-                  className="px-5 py-3 bg-white border border-border text-ink rounded-2xl text-sm font-semibold hover:bg-cream transition-colors flex items-center gap-2">
-                  <X className="w-4 h-4" /> Clear
+              <div className="flex gap-3">
+                <button type="submit"
+                  className="flex-1 sm:flex-none px-6 py-3 bg-ember text-white rounded-2xl text-sm font-semibold hover:bg-orange-600 transition-colors">
+                  Search
                 </button>
-              )}
+                {searched && (
+                  <button type="button" onClick={clearSearch}
+                    className="flex-1 sm:flex-none px-5 py-3 bg-white border border-border text-ink rounded-2xl text-sm font-semibold hover:bg-cream transition-colors flex items-center justify-center gap-2">
+                    <X className="w-4 h-4" /> Clear
+                  </button>
+                )}
+              </div>
             </div>
           </form>
 
@@ -324,8 +326,8 @@ export default function SearchClient() {
 
           {/* Query input */}
           <form onSubmit={e => { e.preventDefault(); doNlmSearch(nlmInput) }} className="mb-6">
-            <div className="flex gap-3">
-              <div className="flex-1 relative">
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="flex-1 relative min-w-0">
                 <Sparkles className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
                 <input value={nlmInput} onChange={e => setNlmInput(e.target.value)}
                   placeholder="Ask a question or describe what you're looking for…"
@@ -337,17 +339,19 @@ export default function SearchClient() {
                   </button>
                 )}
               </div>
-              <button type="submit"
-                disabled={!selectedNbs.length || !nlmInput.trim() || nlmLoading}
-                className="px-6 py-3 bg-forest text-white rounded-2xl text-sm font-semibold hover:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-                {nlmLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Ask'}
-              </button>
-              {nlmSearched && (
-                <button type="button" onClick={clearNlmSearch}
-                  className="px-5 py-3 bg-white border border-border text-ink rounded-2xl text-sm font-semibold hover:bg-cream transition-colors flex items-center gap-2">
-                  <X className="w-4 h-4" /> Clear
+              <div className="flex gap-3">
+                <button type="submit"
+                  disabled={!selectedNbs.length || !nlmInput.trim() || nlmLoading}
+                  className="flex-1 sm:flex-none px-6 py-3 bg-forest text-white rounded-2xl text-sm font-semibold hover:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                  {nlmLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Ask'}
                 </button>
-              )}
+                {nlmSearched && (
+                  <button type="button" onClick={clearNlmSearch}
+                    className="flex-1 sm:flex-none px-5 py-3 bg-white border border-border text-ink rounded-2xl text-sm font-semibold hover:bg-cream transition-colors flex items-center justify-center gap-2">
+                    <X className="w-4 h-4" /> Clear
+                  </button>
+                )}
+              </div>
             </div>
             {!selectedNbs.length && <p className="text-xs text-amber-600 mt-2">Select at least one notebook above</p>}
           </form>

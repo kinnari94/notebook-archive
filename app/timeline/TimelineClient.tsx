@@ -70,16 +70,16 @@ export default function TimelineClient() {
   const allYears = data.length ? { min: data[0]._id, max: data[data.length - 1]._id } : null
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-8">
       <div className="mb-6">
-        <h1 className="font-serif text-3xl font-bold text-[#1C3D27]">Timeline</h1>
+        <h1 className="font-serif text-2xl sm:text-3xl font-bold text-[#1C3D27]">Timeline</h1>
         <p className="text-muted text-sm mt-1">
           {filtered.length} years · {filtered.reduce((s, y) => s + y.count, 0).toLocaleString()} incidents
         </p>
       </div>
 
       {/* Source toggle */}
-      <div className="flex gap-2 mb-4">
+      <div className="flex flex-wrap gap-2 mb-4">
         {(['all', 'standard', 'bapa_katha'] as Source[]).map(s => (
           <button key={s} onClick={() => setSource(s)}
             className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
@@ -94,7 +94,7 @@ export default function TimelineClient() {
 
       {/* Year range filter */}
       {allYears && (
-        <div className="bg-white border border-border rounded-2xl p-4 mb-6 flex items-center gap-6">
+        <div className="bg-white border border-border rounded-2xl p-4 mb-6 flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
           <div className="flex items-center gap-3">
             <label className="text-sm text-muted font-medium">From</label>
             <input type="number" value={yearFrom ?? ''} min={allYears.min} max={allYears.max}
@@ -135,22 +135,22 @@ export default function TimelineClient() {
         <div className="space-y-3">
           {filtered.map(y => (
             <div key={y._id} className="bg-white rounded-2xl border border-border overflow-hidden">
-              <button className="w-full px-6 py-4 flex items-center justify-between hover:bg-cream/50 transition-colors"
+              <button className="w-full px-4 sm:px-6 py-4 flex items-center justify-between gap-2 hover:bg-cream/50 transition-colors"
                 onClick={() => expandYear(y._id)}>
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2 sm:gap-4 flex-wrap min-w-0">
                   <span className="font-serif text-xl font-bold text-ink">{y._id}</span>
                   <span className="text-sm text-muted">{y.count} incidents</span>
                   <div className="flex gap-1 flex-wrap">
                     {y.categories.slice(0, 4).map(c => (
-                      <span key={c} className="w-2 h-2 rounded-full" style={{ backgroundColor: CATEGORY_COLORS[c] || '#9CA3AF' }} title={c} />
+                      <span key={c} className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: CATEGORY_COLORS[c] || '#9CA3AF' }} title={c} />
                     ))}
                   </div>
                 </div>
-                <span className={`text-muted transition-transform ${expanded === y._id ? 'rotate-180' : ''}`}>▾</span>
+                <span className={`text-muted transition-transform shrink-0 ${expanded === y._id ? 'rotate-180' : ''}`}>▾</span>
               </button>
 
               {expanded === y._id && (
-                <div className="border-t border-border px-6 py-5">
+                <div className="border-t border-border px-4 sm:px-6 py-5">
                   {loadingYear ? (
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                       {[...Array(4)].map((_, i) => <div key={i} className="h-32 bg-cream rounded-xl animate-pulse" />)}

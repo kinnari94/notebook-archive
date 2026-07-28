@@ -13,7 +13,7 @@ export default function ExtractionBar() {
 
   return (
     <div
-      className="fixed bottom-4 right-4 z-50 bg-[#1c1917] text-white rounded-2xl shadow-xl border border-stone-700 w-80 cursor-pointer"
+      className="fixed bottom-4 right-4 left-4 sm:left-auto z-50 bg-[#1c1917] text-white rounded-2xl shadow-xl border border-stone-700 w-auto sm:w-80 cursor-pointer"
       onClick={restore}
     >
       <div className="flex items-center gap-3 px-4 py-3">

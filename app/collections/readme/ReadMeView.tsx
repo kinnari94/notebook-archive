@@ -35,7 +35,7 @@ export default function ReadMeView() {
 
   return (
     <div className="min-h-screen bg-[#F7F3ED] text-[#5C1F2E] pb-16 font-sans">
-      <header className="bg-white py-4 px-6 sticky top-0 z-30 border-b border-[#E8E3DB]">
+      <header className="bg-white py-4 px-6 sticky top-14 md:top-0 z-20 border-b border-[#E8E3DB]">
         <div className="flex items-center gap-3">
           <div className="bg-[#5C1F2E] text-white p-2 rounded-lg">
             <BookOpen className="w-4 h-4" />

@@ -74,11 +74,23 @@ export const APPROVAL_STATUS_OPTIONS: Option[] = [
   { value: 'Done',        label: 'Done' },
   { value: 'Deferred',    label: 'Deferred' },
 ]
+export const APPROVAL_STATUS_META: Record<string, { badge: string }> = {
+  Proposed:      { badge: 'bg-blue-50 text-blue-700 border-blue-200' },
+  Approved:      { badge: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
+  'In progress': { badge: 'bg-amber-50 text-amber-700 border-amber-200' },
+  Done:          { badge: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  Deferred:      { badge: 'bg-gray-50 text-gray-600 border-gray-200' },
+}
 export const ACTION_LEVEL_OPTIONS: Option[] = [
   { value: 'Immediate',  label: 'Immediate' },
   { value: 'Near-term',  label: 'Near-term' },
   { value: 'Deferred',   label: 'Deferred' },
 ]
+export const ACTION_LEVEL_META: Record<string, { badge: string }> = {
+  Immediate:    { badge: 'bg-red-50 text-red-700 border-red-200' },
+  'Near-term':  { badge: 'bg-amber-50 text-amber-700 border-amber-200' },
+  Deferred:     { badge: 'bg-gray-50 text-gray-600 border-gray-200' },
+}
 export const ACTION_TYPE_OPTIONS: Option[] = [
   { value: 'Stabilize',             label: 'Stabilize' },
   { value: 'Rehouse',               label: 'Rehouse' },
@@ -97,6 +109,14 @@ export const CHANGE_LOG_ACTION_TYPE_OPTIONS: Option[] = [
   { value: 'Delete',      label: 'Delete' },
   { value: 'Batchupdate', label: 'Batchupdate' },
 ]
+export const CHANGE_LOG_ACTION_TYPE_META: Record<string, { badge: string }> = {
+  create:      { badge: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  Edit:        { badge: 'bg-blue-50 text-blue-700 border-blue-200' },
+  Merge:       { badge: 'bg-purple-50 text-purple-700 border-purple-200' },
+  Split:       { badge: 'bg-teal-50 text-teal-700 border-teal-200' },
+  Delete:      { badge: 'bg-red-50 text-red-700 border-red-200' },
+  Batchupdate: { badge: 'bg-amber-50 text-amber-700 border-amber-200' },
+}
 // The workbook's own sheet tabs — which sheet a logged change was made in.
 export const SHEET_NAME_OPTIONS: Option[] = [
   '00_Read_Me', '01_Lists_Config', '02_Inventory_Master', '03_Condition_Assess',

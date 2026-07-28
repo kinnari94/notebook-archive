@@ -173,7 +173,7 @@ function Toast({ msg, onDismiss }: { msg: { ok: boolean; text: string }; onDismi
     return () => clearTimeout(t)
   }, [onDismiss])
   return (
-    <div className={`fixed bottom-6 right-6 flex items-center gap-2.5 px-5 py-3.5 rounded-2xl shadow-lg text-sm font-medium z-50 ${msg.ok ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'}`}>
+    <div className={`fixed bottom-6 right-4 left-4 sm:left-auto sm:right-6 flex items-center gap-2.5 px-5 py-3.5 rounded-2xl shadow-lg text-sm font-medium z-50 ${msg.ok ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'}`}>
       {msg.ok ? <CheckCircle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
       {msg.text}
     </div>
@@ -301,11 +301,11 @@ export default function UsersClient({ currentEmail }: { currentEmail: string }) 
   const emailValid = newEmail.includes('@') && newEmail.includes('.')
 
   return (
-    <div className="p-8 max-w-2xl">
+    <div className="p-4 sm:p-8 max-w-2xl">
       {/* Header */}
       <div className="mb-8">
-        <div className="flex items-center gap-3 mb-1">
-          <h1 className="font-serif text-3xl font-bold text-[#1C3D27]">User Access</h1>
+        <div className="flex flex-wrap items-center gap-3 mb-1">
+          <h1 className="font-serif text-2xl sm:text-3xl font-bold text-[#1C3D27]">User Access</h1>
           <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
             isRestricted ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'
           }`}>
@@ -322,9 +322,9 @@ export default function UsersClient({ currentEmail }: { currentEmail: string }) 
       </div>
 
       {/* Add user */}
-      <div className="bg-white border border-border rounded-2xl p-6 mb-5">
+      <div className="bg-white border border-border rounded-2xl p-4 sm:p-6 mb-5">
         <div className="flex items-center gap-3 mb-5">
-          <div className="w-9 h-9 bg-forest/10 rounded-xl flex items-center justify-center">
+          <div className="w-9 h-9 bg-forest/10 rounded-xl flex items-center justify-center shrink-0">
             <UserPlus className="w-5 h-5 text-forest" />
           </div>
           <div>
@@ -332,7 +332,7 @@ export default function UsersClient({ currentEmail }: { currentEmail: string }) 
             <p className="text-xs text-muted">Grant access and assign a role</p>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-col sm:flex-row gap-2">
           <input
             ref={inputRef}
             type="email"
@@ -340,24 +340,26 @@ export default function UsersClient({ currentEmail }: { currentEmail: string }) 
             onChange={e => setNewEmail(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && emailValid && !adding && addUser()}
             placeholder="name@gmail.com"
-            className="flex-1 px-4 py-2.5 rounded-xl border border-border bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-ember/30 placeholder:text-muted/60"
+            className="flex-1 px-4 py-2.5 rounded-xl border border-border bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-ember/30 placeholder:text-muted/60 min-w-0"
           />
-          <select
-            value={newRole}
-            onChange={e => setNewRole(e.target.value as Role)}
-            className="px-3 py-2.5 rounded-xl border border-border bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-ember/30 cursor-pointer"
-          >
-            <option value="guest">Guest</option>
-            <option value="admin">Admin</option>
-          </select>
-          <button
-            onClick={addUser}
-            disabled={adding || !emailValid}
-            className="flex items-center gap-1.5 px-5 py-2.5 bg-forest text-white rounded-xl text-sm font-semibold hover:bg-forest-light disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-          >
-            {adding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-            Add
-          </button>
+          <div className="flex gap-2">
+            <select
+              value={newRole}
+              onChange={e => setNewRole(e.target.value as Role)}
+              className="flex-1 sm:flex-none px-3 py-2.5 rounded-xl border border-border bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-ember/30 cursor-pointer"
+            >
+              <option value="guest">Guest</option>
+              <option value="admin">Admin</option>
+            </select>
+            <button
+              onClick={addUser}
+              disabled={adding || !emailValid}
+              className="flex items-center justify-center gap-1.5 px-5 py-2.5 bg-forest text-white rounded-xl text-sm font-semibold hover:bg-forest-light disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
+            >
+              {adding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+              Add
+            </button>
+          </div>
         </div>
         <div className="mt-3 flex flex-wrap gap-4 text-xs text-muted">
           <span className="flex items-center gap-1">
@@ -415,7 +417,7 @@ export default function UsersClient({ currentEmail }: { currentEmail: string }) 
 
               return (
                 <li key={u.email} className={i < users.length - 1 ? 'border-b border-border' : ''}>
-                  <div className="flex items-center justify-between px-5 py-3.5 hover:bg-cream/30 transition-colors group">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 sm:px-5 py-3.5 hover:bg-cream/30 transition-colors group">
                     <div className="flex items-center gap-3 min-w-0">
                       <UserAvatar email={u.email} />
                       <div className="min-w-0">
@@ -438,7 +440,7 @@ export default function UsersClient({ currentEmail }: { currentEmail: string }) 
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 shrink-0 ml-3">
+                    <div className="flex items-center flex-wrap gap-2 shrink-0 sm:ml-3">
                       {/* Permissions expand button — guests only */}
                       {isGuest && (
                         <button
@@ -479,7 +481,7 @@ export default function UsersClient({ currentEmail }: { currentEmail: string }) 
                         <button
                           onClick={() => setConfirmRemove(u.email)}
                           disabled={removing === u.email}
-                          className="p-1.5 text-muted hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100 disabled:opacity-50"
+                          className="p-1.5 text-muted hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors opacity-100 sm:opacity-0 sm:group-hover:opacity-100 disabled:opacity-50"
                           title="Remove user"
                         >
                           {removing === u.email ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}

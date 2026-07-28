@@ -46,13 +46,13 @@ export default function DashboardClient() {
   const maxCount = data?.breakdown?.[0]?.count || 1
 
   return (
-    <div className="p-8">
-      <div className="mb-8 flex items-start justify-between">
+    <div className="p-4 sm:p-8">
+      <div className="mb-8 flex flex-col sm:flex-row sm:items-start justify-between gap-3">
         <div>
-          <h1 className="font-serif text-3xl font-bold text-[#1C3D27] mb-1">Archive Overview</h1>
+          <h1 className="font-serif text-2xl sm:text-3xl font-bold text-[#1C3D27] mb-1">Archive Overview</h1>
           <p className="text-muted text-sm">Bapaji · SRMD Spiritual Biography</p>
         </div>
-        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium ${
+        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium self-start ${
           connected === null ? 'bg-gray-100 text-gray-500' :
           connected ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-600'
         }`}>
@@ -63,7 +63,7 @@ export default function DashboardClient() {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-8">
         {[
           { label: 'Total Incidents', value: (data?.stats?.incidents ?? 0) + (data?.stats?.bk_stories ?? 0), icon: BookOpen, color: 'bg-blue-50 text-blue-600' },
           { label: 'People', value: data?.stats?.people, icon: Users, color: 'bg-purple-50 text-purple-600' },

@@ -105,7 +105,8 @@ const HandoverChecklistView = forwardRef<HandoverChecklistViewHandle>(function H
             <div className="bg-[#1B3A2E] text-white px-6 py-3">
               <h2 className="font-serif text-lg font-bold">SRMD Collection Assessment · Handover Checklist</h2>
             </div>
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[640px]">
               <thead>
                 <tr className="border-b border-[#E8E3DB] bg-[#FAF8F5] text-left">
                   <th className="px-4 py-2.5 font-mono text-[10px] uppercase tracking-wider text-[#1B3A2E]/50 w-1/2">Item</th>
@@ -174,6 +175,7 @@ const HandoverChecklistView = forwardRef<HandoverChecklistViewHandle>(function H
                 ))}
               </tbody>
             </table>
+            </div>
             {savingItem && (
               <div className="px-4 py-2 text-[10px] font-mono text-[#1B3A2E]/40 no-print">Saving…</div>
             )}

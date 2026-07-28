@@ -69,45 +69,49 @@ export default function CollectionsVaultView() {
   return (
     <div className="min-h-screen bg-[#F7F3ED] text-[#1B3A2E] font-sans">
       {/* PROFESSIONAL HEADER SECTION */}
-      <header className="bg-white border-b border-[#E8E3DB] sticky top-0 z-40">
-        <div className="px-8 py-5 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="w-10 h-10 bg-[#1B3A2E] rounded-xl flex items-center justify-center shadow-inner">
+      <header className="bg-white border-b border-[#E8E3DB] sticky top-14 md:top-0 z-20">
+        <div className="px-4 sm:px-6 lg:px-8 py-4 sm:py-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+          <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 bg-[#1B3A2E] rounded-xl flex items-center justify-center shadow-inner shrink-0">
               <Package className="w-5 h-5 text-[#F7F3ED]" />
             </div>
-            <div>
-              <h1 className="text-xl font-serif font-bold tracking-tight text-[#1B3A2E]">
+            <div className="min-w-0">
+              <h1 className="text-lg sm:text-xl font-serif font-bold tracking-tight text-[#1B3A2E] truncate">
                 Collections Vault
               </h1>
-              <p className="text-[10px] font-bold text-[#1B3A2E]/40 uppercase tracking-[0.2em] mt-0.5">
+              <p className="hidden sm:block text-[10px] font-bold text-[#1B3A2E]/40 uppercase tracking-[0.2em] mt-0.5">
                 Institutional Archive Management
               </p>
             </div>
           </div>
 
-          {canAddOnActiveTab && (
-            <button
-              onClick={() => sheetViewRef.current?.openAdd()}
-              className="px-4 py-2.5 bg-[#1B3A2E] hover:bg-[#2D5C45] text-white text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 shrink-0"
-            >
-              <Plus className="w-4 h-4" />
-              Add {activeConfig?.label ?? 'Entry'}
-            </button>
-          )}
+          {(canAddOnActiveTab || canDownloadOnActiveTab) && (
+            <div className="flex items-center gap-2">
+              {canAddOnActiveTab && (
+                <button
+                  onClick={() => sheetViewRef.current?.openAdd()}
+                  className="px-3 sm:px-4 py-2.5 bg-[#1B3A2E] hover:bg-[#2D5C45] text-white text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 shrink-0"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span className="truncate">Add {activeConfig?.label ?? 'Entry'}</span>
+                </button>
+              )}
 
-          {canDownloadOnActiveTab && (
-            <button
-              onClick={handleDownloadPdf}
-              className="px-4 py-2.5 bg-[#1B3A2E] hover:bg-[#2D5C45] text-white text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 shrink-0"
-            >
-              <Download className="w-4 h-4" />
-              Download PDF
-            </button>
+              {canDownloadOnActiveTab && (
+                <button
+                  onClick={handleDownloadPdf}
+                  className="px-3 sm:px-4 py-2.5 bg-[#1B3A2E] hover:bg-[#2D5C45] text-white text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 shrink-0"
+                >
+                  <Download className="w-4 h-4" />
+                  Download PDF
+                </button>
+              )}
+            </div>
           )}
         </div>
 
         {/* TAB NAVIGATION — numbered segmented pill group, permanently rounded window */}
-        <div className="px-8 pb-4">
+        <div className="px-4 sm:px-6 lg:px-8 pb-4">
           <div className="relative rounded-xl overflow-hidden bg-[#F7F3ED]">
             <div
               ref={tabScrollRef}

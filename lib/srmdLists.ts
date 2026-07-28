@@ -28,12 +28,26 @@ export const ACCESS_LEVEL_OPTIONS: Option[] = [
   { value: 'SENSITIVE',  label: 'Sensitive' },
 ]
 
+export const ACCESS_LEVEL_META: Record<string, { badge: string }> = {
+  OPEN:       { badge: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  INTERNAL:   { badge: 'bg-blue-50 text-blue-700 border-blue-200' },
+  RESTRICTED: { badge: 'bg-amber-50 text-amber-700 border-amber-200' },
+  SENSITIVE:  { badge: 'bg-red-50 text-red-700 border-red-200' },
+}
+
 export const SURVEY_STATUS_OPTIONS: Option[] = [
   { value: 'Not Started',    label: 'Not Started' },
   { value: 'Inventory Only', label: 'Inventory Only' },
   { value: 'CA Done',        label: 'CA Done' },
   { value: 'Complete',       label: 'Complete' },
 ]
+
+export const SURVEY_STATUS_META: Record<string, { badge: string }> = {
+  'Not Started':    { badge: 'bg-gray-50 text-gray-600 border-gray-200' },
+  'Inventory Only': { badge: 'bg-blue-50 text-blue-700 border-blue-200' },
+  'CA Done':        { badge: 'bg-violet-50 text-violet-700 border-violet-200' },
+  'Complete':       { badge: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+}
 
 export const OVERALL_CONDITION_OPTIONS: Option[] = [
   { value: 'Stable',   label: 'Stable' },
@@ -91,6 +105,16 @@ export const PHOTO_VIEW_OPTIONS: Option[] = [
   { value: 'MARK',   label: 'Markings/inscription' },
   { value: 'COND',   label: 'Condition documentation' },
 ]
+
+// Purely categorical (not a severity scale like the METAs above) — just gives each
+// view type its own color so Photo Log cards aren't a wall of identical gray badges.
+export const PHOTO_VIEW_META: Record<string, { badge: string }> = {
+  REF:    { badge: 'bg-blue-50 text-blue-700 border-blue-200' },
+  REV:    { badge: 'bg-purple-50 text-purple-700 border-purple-200' },
+  DETAIL: { badge: 'bg-teal-50 text-teal-700 border-teal-200' },
+  MARK:   { badge: 'bg-amber-50 text-amber-700 border-amber-200' },
+  COND:   { badge: 'bg-rose-50 text-rose-700 border-rose-200' },
+}
 
 // Damage terms (tblDamageTerms), grouped by Collection_Type code
 export const DAMAGE_TERMS_BY_TYPE: Record<string, string[]> = {

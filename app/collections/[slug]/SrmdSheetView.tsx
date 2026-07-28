@@ -4,10 +4,12 @@ import { motion, AnimatePresence } from 'motion/react'
 import { useSession } from 'next-auth/react'
 import { Search, Filter, Loader2, X, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Edit2, Trash2, Check, Archive, Image as ImageIcon, AlertTriangle, Calendar } from 'lucide-react'
 import { getSrmdSheet, type SrmdField } from '@/lib/srmd-sheets'
-import { OVERALL_CONDITION_META, PRIORITY_BAND_META } from '@/lib/srmdLists'
+import {
+  OVERALL_CONDITION_META, PRIORITY_BAND_META, ACCESS_LEVEL_META, SURVEY_STATUS_META, PHOTO_VIEW_META,
+} from '@/lib/srmdLists'
 import { hasEditAccess, type ViewPermissions } from '@/lib/permissions'
 import { useDropdownOptions } from '@/lib/useDropdownOptions'
-import type { Option } from '@/lib/dropdown-option-sets'
+import { APPROVAL_STATUS_META, ACTION_LEVEL_META, CHANGE_LOG_ACTION_TYPE_META, type Option } from '@/lib/dropdown-option-sets'
 import SelectWithAdd from '@/components/SelectWithAdd'
 
 type Doc = Record<string, unknown> & { _id: string }
@@ -136,6 +138,37 @@ function badgeMetaFor(field: string | undefined, value: unknown) {
   if (!field || value == null || value === '') return null
   if (field === 'Overall_Condition') return OVERALL_CONDITION_META[String(value)] || null
   if (field === 'Priority_Band') return PRIORITY_BAND_META[String(value)] || null
+  if (field === 'Approval_Status') return APPROVAL_STATUS_META[String(value)] || null
+  if (field === 'View_Type') return PHOTO_VIEW_META[String(value)] || null
+  return null
+}
+
+// Yes/No fields where "Yes" specifically signals something urgent/negative (vs. e.g.
+// Photo Log's Scale_Present, where "Yes" is just neutral metadata) — colored so the
+// alarming ones actually stand out in the chip grid instead of reading as plain text.
+const URGENT_YES_NO_FIELDS = new Set(['Immediate_Stabilization_Needed', 'Quarantine_Flag', 'Alert_Flag'])
+
+// Colors a chip's VALUE (not just the sheet's single designated badgeField) for any
+// field whose values map to a known status/severity scale — gives cards highlights
+// across the fields people actually scan for (access, survey progress, condition,
+// priority, approval, urgency) instead of everything reading as flat gray/black text.
+// Takes the sheet slug because "Action_Type" is reused with two unrelated value
+// domains — Treatment Recommendations (Stabilize/Rehouse/…) vs. Change Log
+// (create/Edit/Merge/…) — and shouldn't be resolved by key name alone.
+function chipHighlight(key: string, value: unknown, slug: string): string | null {
+  if (value == null || value === '') return null
+  const v = String(value)
+  if (key === 'Access_Level') return ACCESS_LEVEL_META[v]?.badge ?? null
+  if (key === 'Survey_Status') return SURVEY_STATUS_META[v]?.badge ?? null
+  if (key === 'Overall_Condition') return OVERALL_CONDITION_META[v]?.badge ?? null
+  if (key === 'Priority_Band') return PRIORITY_BAND_META[v]?.badge ?? null
+  if (key === 'Approval_Status') return APPROVAL_STATUS_META[v]?.badge ?? null
+  if (key === 'Action_Level') return ACTION_LEVEL_META[v]?.badge ?? null
+  if (key === 'View_Type') return PHOTO_VIEW_META[v]?.badge ?? null
+  if (key === 'Action_Type' && slug === 'change-log') return CHANGE_LOG_ACTION_TYPE_META[v]?.badge ?? null
+  if (URGENT_YES_NO_FIELDS.has(key)) {
+    return v === 'Yes' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+  }
   return null
 }
 
@@ -396,10 +429,10 @@ const SrmdSheetView = React.forwardRef<SrmdSheetViewHandle, { slug: string }>(fu
 
   return (
     <div className="min-h-screen bg-[#F7F3ED] text-[#1B3A2E] pb-16 font-sans">
-      <div className="px-6 lg:px-8 py-6 space-y-8">
+      <div className="px-4 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-6 sm:space-y-8">
 
         {/* Search + filters */}
-        <div className="bg-gradient-to-b from-white to-[#FBF9F5] border border-[#E8E3DB]/60 rounded-xl p-5 space-y-3.5 shadow-[0_1px_3px_rgba(27,58,46,0.06),0_1px_2px_rgba(27,58,46,0.04)]">
+        <div className="bg-gradient-to-b from-white to-[#FBF9F5] border border-[#E8E3DB]/60 rounded-xl p-4 sm:p-5 space-y-3.5 shadow-[0_1px_3px_rgba(27,58,46,0.06),0_1px_2px_rgba(27,58,46,0.04)]">
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-2.5 w-4 h-4 text-[#1B3A2E]/40" />
@@ -456,7 +489,7 @@ const SrmdSheetView = React.forwardRef<SrmdSheetViewHandle, { slug: string }>(fu
             <Loader2 className="w-5 h-5 animate-spin mr-2" /> Loading…
           </div>
         ) : items.length === 0 ? (
-          <div className="bg-white border border-[#E8E3DB] rounded-2xl p-16 text-center space-y-4">
+          <div className="bg-white border border-[#E8E3DB] rounded-2xl p-8 sm:p-16 text-center space-y-4">
             <div className="w-12 h-12 bg-[#F7F3ED] rounded-full border border-[#E8E3DB] flex items-center justify-center mx-auto">
               <Archive className="w-5 h-5 text-[#1B3A2E]/30" />
             </div>
@@ -466,7 +499,7 @@ const SrmdSheetView = React.forwardRef<SrmdSheetViewHandle, { slug: string }>(fu
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5">
             {items.map(item => {
               const focused = selected?._id === item._id
               const badgeVal = config.badgeField ? item[config.badgeField] : null
@@ -480,10 +513,10 @@ const SrmdSheetView = React.forwardRef<SrmdSheetViewHandle, { slug: string }>(fu
                   transition={{ duration: 0.4, ease: 'circInOut', type: 'spring' }}
                   whileHover={{ y: -4 }}
                   onClick={() => setSelected(focused ? null : item)}
-                  className={`bg-white/50 backdrop-blur-sm rounded-xl border transition-shadow duration-200 cursor-pointer overflow-hidden group flex flex-col justify-between shadow-[0_1px_3px_rgba(27,58,46,0.08),0_1px_2px_rgba(27,58,46,0.05)] ${
+                  className={`bg-white rounded-xl border transition-shadow duration-200 cursor-pointer overflow-hidden group flex flex-col justify-between shadow-[0_1px_3px_rgba(27,58,46,0.08),0_1px_2px_rgba(27,58,46,0.05)] ${
                     focused
                       ? 'border-[#1B3A2E] ring-1 ring-[#1B3A2E] shadow-[0_8px_24px_rgba(27,58,46,0.16)]'
-                      : 'border-[#E8E3DB]/70 hover:border-[#1B3A2E]/30 hover:shadow-[0_10px_28px_rgba(27,58,46,0.14)]'
+                      : 'border-[#E8E3DB] hover:border-[#1B3A2E]/40 hover:shadow-[0_10px_28px_rgba(27,58,46,0.14)]'
                   }`}
                 >
                   {config.imageField && (
@@ -503,37 +536,47 @@ const SrmdSheetView = React.forwardRef<SrmdSheetViewHandle, { slug: string }>(fu
                       )}
                     </div>
                   )}
-                  <div className="p-4 space-y-2.5 flex-1">
+                  <div className="p-5 space-y-3 flex-1">
                     <div className="flex items-start justify-between gap-2">
-                      <h4 className="font-serif font-normal text-stone-900 text-base sm:text-lg leading-snug group-hover:text-stone-700 transition-colors">
+                      <h4 className="font-serif font-semibold text-stone-900 text-base sm:text-lg leading-snug group-hover:text-[#1B3A2E] transition-colors">
                         {formatVal(item[config.titleField])}
                       </h4>
                       {badgeVal != null && badgeVal !== '' && (
-                        <span className={`shrink-0 px-2 py-0.5 rounded font-mono text-[11px] font-semibold uppercase tracking-wider border ${bMeta?.badge || 'bg-gray-50 text-gray-700 border-gray-200'}`}>
+                        <span className={`shrink-0 px-2.5 py-1 rounded-md font-mono text-[11px] font-bold uppercase tracking-wider border ${bMeta?.badge || 'bg-gray-50 text-gray-700 border-gray-200'}`}>
                           {String(badgeVal)}
                         </span>
                       )}
                     </div>
                     {config.subtitleField && (
-                      <p className="text-stone-500 text-sm font-mono">{formatVal(item[config.subtitleField])}</p>
+                      <p className="text-stone-600 text-sm font-mono font-medium">{formatVal(item[config.subtitleField])}</p>
                     )}
                     {chipColumns.length > 0 && (
-                      <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 pt-2.5 mt-1 border-t border-stone-100 text-sm">
-                        {chipColumns.map(c => (
-                          <div key={c.key} className="min-w-0 overflow-hidden">
-                            <span className="text-stone-400 text-[11px] uppercase font-mono block">{c.label}</span>
-                            <span className="text-stone-700 font-medium truncate block">{formatVal(item[c.key])}</span>
-                          </div>
-                        ))}
+                      <div className="grid grid-cols-2 gap-x-3 gap-y-2.5 pt-3 mt-1 border-t border-stone-200 text-sm">
+                        {chipColumns.map(c => {
+                          const raw = item[c.key]
+                          const hi = chipHighlight(c.key, raw, slug)
+                          return (
+                            <div key={c.key} className="min-w-0 overflow-hidden">
+                              <span className="text-stone-500 text-[11px] uppercase font-mono font-semibold tracking-wide block mb-0.5">{c.label}</span>
+                              {hi ? (
+                                <span className={`inline-block max-w-full truncate px-1.5 py-0.5 rounded font-bold text-[11px] uppercase tracking-wide border ${hi}`}>
+                                  {formatVal(raw)}
+                                </span>
+                              ) : (
+                                <span className="text-stone-800 font-semibold truncate block">{formatVal(raw)}</span>
+                              )}
+                            </div>
+                          )
+                        })}
                       </div>
                     )}
                   </div>
                   {canEdit && (
-                    <div className="bg-stone-50/80 border-t border-stone-100 py-2 px-4 flex items-center justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button onClick={e => { e.stopPropagation(); openEdit(item) }} className="p-1 hover:bg-stone-100 text-stone-400 hover:text-stone-800 rounded transition-colors">
+                    <div className="bg-stone-50 border-t border-stone-200 py-2 px-4 flex items-center justify-end gap-1.5 opacity-80 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                      <button onClick={e => { e.stopPropagation(); openEdit(item) }} className="p-1.5 hover:bg-stone-200 text-stone-500 hover:text-stone-900 rounded-md transition-colors" title="Edit">
                         <Edit2 className="w-3.5 h-3.5" />
                       </button>
-                      <button onClick={e => handleDelete(item._id, e)} className="p-1 hover:bg-red-50 text-stone-400 hover:text-red-500 rounded transition-colors">
+                      <button onClick={e => handleDelete(item._id, e)} className="p-1.5 hover:bg-red-50 text-stone-500 hover:text-red-600 rounded-md transition-colors" title="Delete">
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
@@ -546,8 +589,8 @@ const SrmdSheetView = React.forwardRef<SrmdSheetViewHandle, { slug: string }>(fu
 
         {/* Pagination */}
         {!loading && total > PAGE_SIZE && (
-          <div className="flex items-center justify-between pt-1">
-            <span className="text-[10px] font-mono text-[#1B3A2E]/40">
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+            <span className="text-xs font-mono font-medium text-[#1B3A2E]/70">
               {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} of {total}
             </span>
             <div className="flex items-center gap-1">
@@ -603,10 +646,10 @@ const SrmdSheetView = React.forwardRef<SrmdSheetViewHandle, { slug: string }>(fu
                 </div>
               )}
               <div className="bg-[#FAF8F5]/90 border border-stone-200 rounded-xl p-4 space-y-3 shadow-[0_1px_3px_rgba(27,58,46,0.05)]">
-                <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3 text-sm">
                   {config.fields.filter(f => f.type !== 'image' && f.type !== 'hidden' && selected[f.key] != null && selected[f.key] !== '').map(f => (
                     <div key={f.key} className={f.type === 'textarea' ? 'col-span-2' : 'min-w-0 overflow-hidden'}>
-                      <span className="text-[11px] font-mono text-stone-400 block uppercase font-bold">{f.label}:</span>
+                      <span className="text-[11px] font-mono text-stone-500 block uppercase font-bold">{f.label}:</span>
                       {f.type === 'textarea' ? (
                         <p className="text-stone-600 text-sm leading-relaxed bg-white p-2.5 rounded-lg border border-stone-200 mt-1 break-words">{formatVal(selected[f.key])}</p>
                       ) : (
@@ -624,10 +667,10 @@ const SrmdSheetView = React.forwardRef<SrmdSheetViewHandle, { slug: string }>(fu
                 return (
                   <div className="bg-[#FAF8F5]/90 border border-stone-200 rounded-xl p-4 space-y-3 shadow-[0_1px_3px_rgba(27,58,46,0.05)]">
                     <span className="text-[11px] font-mono font-bold text-stone-500 uppercase tracking-wider block">📋 Additional Fields</span>
-                    <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                       {extra.map(([k, v]) => (
                         <div key={k} className="min-w-0 overflow-hidden">
-                          <span className="text-[11px] font-mono text-stone-400 block uppercase font-bold truncate">{humanize(k)}:</span>
+                          <span className="text-[11px] font-mono text-stone-500 block uppercase font-bold truncate">{humanize(k)}:</span>
                           <span className="font-medium text-stone-800 mt-0.5 block break-words">{formatVal(v)}</span>
                         </div>
                       ))}
@@ -659,21 +702,21 @@ const SrmdSheetView = React.forwardRef<SrmdSheetViewHandle, { slug: string }>(fu
               exit={{ scale: 0.96, opacity: 0 }}
               className="bg-white rounded-xl w-full max-w-3xl border border-[#eae4da] shadow-xl overflow-hidden flex flex-col max-h-[90vh]"
             >
-              <div className="bg-[#1C3D27] p-4 text-white flex items-center justify-between">
-                <div>
-                  <h3 className="font-serif font-bold text-base sm:text-lg">
+              <div className="bg-[#1C3D27] p-4 text-white flex items-center justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <h3 className="font-serif font-bold text-base sm:text-lg truncate">
                     {editingId ? `Edit ${config.label} Entry` : `Add ${config.label} Entry`}
                   </h3>
                   <p className="text-[9px] text-white/75 font-mono mt-0.5 uppercase tracking-widest">
                     {config.sheetTab}
                   </p>
                 </div>
-                <button onClick={() => { setFormOpen(false); setFormError(null) }} className="p-1.5 hover:bg-white/10 rounded-lg cursor-pointer transition-colors text-white">
+                <button onClick={() => { setFormOpen(false); setFormError(null) }} className="p-1.5 hover:bg-white/10 rounded-lg cursor-pointer transition-colors text-white shrink-0">
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
-              <form onSubmit={e => { e.preventDefault(); handleSave() }} className="p-6 overflow-y-auto space-y-4 text-xs flex-1">
+              <form onSubmit={e => { e.preventDefault(); handleSave() }} className="p-4 sm:p-6 overflow-y-auto space-y-4 text-xs flex-1">
                 {formError && (
                   <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 text-red-700 rounded-lg px-3.5 py-3 text-xs font-semibold">
                     <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
@@ -721,7 +764,7 @@ const SrmdSheetView = React.forwardRef<SrmdSheetViewHandle, { slug: string }>(fu
                               </div>
                             )}
                           </div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                             <span className="text-xs text-stone-400 whitespace-nowrap">or paste URL:</span>
                             <input
                               type="text"
