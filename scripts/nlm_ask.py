@@ -4,6 +4,7 @@ Requires: notebooklm login to have been run first (stores ~/.notebooklm/storage_
 """
 import asyncio
 import json
+import os
 import sys
 
 if len(sys.argv) < 3:
@@ -12,6 +13,10 @@ if len(sys.argv) < 3:
 
 notebook_id = sys.argv[1]
 prompt = sys.argv[2]
+
+# Shared/large notebooks can take well past the library's 180s default to send
+# the first response byte. Override via NOTEBOOKLM_CHAT_TIMEOUT if needed.
+CHAT_TIMEOUT = float(os.environ.get("NOTEBOOKLM_CHAT_TIMEOUT", "300"))
 
 
 async def main():
@@ -22,7 +27,7 @@ async def main():
         sys.exit(1)
 
     try:
-        async with await NotebookLMClient.from_storage() as client:
+        async with await NotebookLMClient.from_storage(chat_timeout=CHAT_TIMEOUT) as client:
             result = await client.chat.ask(notebook_id, prompt)
 
         print(json.dumps({"answer": result.answer, "references": []}))

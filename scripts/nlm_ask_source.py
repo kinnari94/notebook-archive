@@ -3,6 +3,7 @@ Usage: nlm_ask_source.py <notebook_id> <source_id> <prompt>
 """
 import asyncio
 import json
+import os
 import sys
 
 if len(sys.argv) < 4:
@@ -13,6 +14,10 @@ notebook_id = sys.argv[1]
 source_id   = sys.argv[2]
 prompt      = sys.argv[3]
 
+# Shared/large notebooks can take well past the library's 180s default to send
+# the first response byte. Override via NOTEBOOKLM_CHAT_TIMEOUT if needed.
+CHAT_TIMEOUT = float(os.environ.get("NOTEBOOKLM_CHAT_TIMEOUT", "300"))
+
 
 async def main():
     try:
@@ -22,7 +27,7 @@ async def main():
         sys.exit(1)
 
     try:
-        async with await NotebookLMClient.from_storage() as client:
+        async with await NotebookLMClient.from_storage(chat_timeout=CHAT_TIMEOUT) as client:
             result = await client.chat.ask(notebook_id, prompt, source_ids=[source_id])
 
         print(json.dumps({"answer": result.answer, "references": []}))

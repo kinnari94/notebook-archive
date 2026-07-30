@@ -337,6 +337,11 @@ function evt(data: object): string {
   return `data: ${JSON.stringify(data)}\n\n`
 }
 
+// Matches transient notebooklm-py failures worth one retry: HTTP 429s, the
+// 180s no-first-byte chat stall on slow/shared notebooks, and the 50MB RPC
+// response cap tripping on a degenerate/repetitive answer.
+const RETRYABLE_ERROR = /rate limit|rejected|no streamed chat bytes|RPC response exceeded/i
+
 // ─── POST handler ────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
@@ -372,8 +377,8 @@ export async function POST(req: NextRequest) {
               try {
                 askResult = await askNotebook(nbId, prompt)
               } catch (retryErr: any) {
-                if (/rate limit|rejected/i.test(String(retryErr))) {
-                  send({ msg: `  ⏳ Rate limited — waiting 30s before retry…`, level: 'muted' })
+                if (RETRYABLE_ERROR.test(String(retryErr))) {
+                  send({ msg: `  ⏳ ${String(retryErr).slice(0, 120)} — waiting 30s before retry…`, level: 'muted' })
                   await new Promise(r => setTimeout(r, 30000))
                   askResult = await askNotebook(nbId, prompt)
                 } else {
@@ -461,8 +466,8 @@ export async function POST(req: NextRequest) {
               try {
                 askResult = await askSource(nbId, src.id, BK_ALL_PROMPT)
               } catch (retryErr: any) {
-                if (/rate limit|rejected/i.test(String(retryErr))) {
-                  send({ msg: `  ⏳ Rate limited — waiting 30s before retry…`, level: 'muted' })
+                if (RETRYABLE_ERROR.test(String(retryErr))) {
+                  send({ msg: `  ⏳ ${String(retryErr).slice(0, 120)} — waiting 30s before retry…`, level: 'muted' })
                   await new Promise(r => setTimeout(r, 30000))
                   askResult = await askSource(nbId, src.id, BK_ALL_PROMPT)
                 } else {
