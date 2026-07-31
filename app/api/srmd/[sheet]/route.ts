@@ -33,6 +33,30 @@ function duplicateFieldMessage(field: string, value: unknown): string {
   return `${field.replace(/_/g, ' ')} "${String(value).trim()}" already exists. IDs must be unique.`
 }
 
+// Rejects out-of-range values for 'number' fields with a min/max (e.g. Condition
+// Assessment's 1–5 severity scores) — the form input's min/max only guides the
+// browser, so this is the actual enforcement against a pasted value or a direct API call.
+function findOutOfRangeField(
+  config: NonNullable<ReturnType<typeof getSrmdSheet>>,
+  body: Record<string, unknown>
+): { field: string; min: number; max: number } | null {
+  for (const field of config.fields) {
+    if (field.min == null && field.max == null) continue
+    const value = body[field.key]
+    if (value == null || value === '') continue
+    const num = Number(value)
+    if (Number.isNaN(num)) continue
+    if ((field.min != null && num < field.min) || (field.max != null && num > field.max)) {
+      return { field: field.key, min: field.min ?? -Infinity, max: field.max ?? Infinity }
+    }
+  }
+  return null
+}
+
+function outOfRangeMessage(field: string, min: number, max: number): string {
+  return `${field.replace(/_/g, ' ')} must be between ${min} and ${max}.`
+}
+
 export async function GET(req: NextRequest, { params }: { params: Promise<{ sheet: string }> }) {
   const { sheet } = await params
   const config = getSrmdSheet(sheet)
@@ -90,6 +114,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ she
   const body = await req.json()
   const db = await getDb()
 
+  const outOfRange = findOutOfRangeField(config, body)
+  if (outOfRange) {
+    return NextResponse.json({ error: outOfRangeMessage(outOfRange.field, outOfRange.min, outOfRange.max) }, { status: 400 })
+  }
+
   const dupField = await findDuplicateField(db, config, body)
   if (dupField) {
     return NextResponse.json({ error: duplicateFieldMessage(dupField, body[dupField]) }, { status: 409 })
@@ -119,6 +148,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ sh
 
   const body = await req.json()
   const db = await getDb()
+
+  const outOfRange = findOutOfRangeField(config, body)
+  if (outOfRange) {
+    return NextResponse.json({ error: outOfRangeMessage(outOfRange.field, outOfRange.min, outOfRange.max) }, { status: 400 })
+  }
 
   const dupField = await findDuplicateField(db, config, body, id)
   if (dupField) {

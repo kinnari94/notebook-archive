@@ -11,6 +11,7 @@ import { hasEditAccess, type ViewPermissions } from '@/lib/permissions'
 import { useDropdownOptions } from '@/lib/useDropdownOptions'
 import { APPROVAL_STATUS_META, ACTION_LEVEL_META, CHANGE_LOG_ACTION_TYPE_META, type Option } from '@/lib/dropdown-option-sets'
 import SelectWithAdd from '@/components/SelectWithAdd'
+import SearchableSelect from '@/components/SearchableSelect'
 
 type Doc = Record<string, unknown> & { _id: string }
 
@@ -121,15 +122,203 @@ function DateInputDMY({ value, onChange, className }: { value: string; onChange:
   )
 }
 
-// Mirrors the workbook's own Month_Key formula: =IF(C3="","",TEXT(C3,"yyyy-mm")) —
-// blank when the source date is blank, else that date's "yyyy-mm".
-function withDerivedMonthKeys(data: Record<string, string>, fields: SrmdField[]): Record<string, string> {
+function parseYearRange(v: string): { start: number; end: number } | null {
+  const m = v.match(/^(\d{4})(?:-(\d{4}))?$/)
+  if (!m) return null
+  const start = Number(m[1])
+  const end = m[2] ? Number(m[2]) : start
+  return { start: Math.min(start, end), end: Math.max(start, end) }
+}
+
+// There's no native year-only <input>, so this pairs a numeric text field (typed
+// digits auto-format as "yyyy" or, past the 4th digit, "yyyy-yyyy") with a
+// calendar-icon button that opens a decade grid for picking by click instead:
+// click one year for a single value, or two years to span a range — click the
+// same year twice for a single-year value.
+function YearPicker({ value, onChange, className }: { value: string; onChange: (v: string) => void; className?: string }) {
+  const [open, setOpen] = useState(false)
+  const [pendingStart, setPendingStart] = useState<number | null>(null)
+  const [decadeStart, setDecadeStart] = useState(() => {
+    const parsed = parseYearRange(value)
+    return Math.floor((parsed ? parsed.start : new Date().getFullYear()) / 10) * 10
+  })
+  const rootRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
+        setOpen(false)
+        setPendingStart(null)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  function openPicker() {
+    const parsed = parseYearRange(value)
+    setDecadeStart(Math.floor((parsed ? parsed.start : new Date().getFullYear()) / 10) * 10)
+    setPendingStart(null)
+    setOpen(true)
+  }
+
+  function handleTextChange(raw: string) {
+    const digits = raw.replace(/\D/g, '').slice(0, 8)
+    const masked = digits.length > 4 ? `${digits.slice(0, 4)}-${digits.slice(4)}` : digits
+    onChange(masked)
+  }
+
+  function pickYear(y: number) {
+    if (pendingStart == null) { setPendingStart(y); return }
+    const start = Math.min(pendingStart, y)
+    const end = Math.max(pendingStart, y)
+    onChange(start === end ? String(start) : `${start}-${end}`)
+    setPendingStart(null)
+    setOpen(false)
+  }
+
+  const committed = pendingStart == null ? parseYearRange(value) : null
+  const years = Array.from({ length: 12 }, (_, i) => decadeStart - 1 + i)
+
+  return (
+    <div ref={rootRef} className="relative">
+      <div className="relative">
+        <input
+          type="text"
+          inputMode="numeric"
+          placeholder="yyyy or yyyy-yyyy"
+          value={value}
+          onFocus={openPicker}
+          onChange={e => handleTextChange(e.target.value)}
+          className={`${className} pr-8`}
+        />
+        <button
+          type="button"
+          tabIndex={-1}
+          onClick={() => (open ? setOpen(false) : openPicker())}
+          className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 cursor-pointer"
+          title="Pick a year or year range"
+        >
+          <Calendar className="w-3.5 h-3.5" />
+        </button>
+      </div>
+      {open && (
+        <div className="absolute z-20 mt-1 w-60 bg-white border border-[#eae4da] rounded-lg shadow-lg p-2">
+          <div className="flex items-center justify-between mb-1.5 px-1">
+            <button
+              type="button"
+              onClick={() => setDecadeStart(dd => dd - 10)}
+              className="p-1 rounded hover:bg-[#F7F3ED] text-stone-500 cursor-pointer"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+            </button>
+            <span className="text-xs font-bold text-stone-600">{decadeStart}s</span>
+            <button
+              type="button"
+              onClick={() => setDecadeStart(dd => dd + 10)}
+              className="p-1 rounded hover:bg-[#F7F3ED] text-stone-500 cursor-pointer"
+            >
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          <p className="text-[10px] text-stone-400 px-1 mb-1.5 leading-snug">
+            {pendingStart != null
+              ? `From ${pendingStart} — click an end year (or ${pendingStart} again for a single year)`
+              : 'Click a year, or click two to make a range'}
+          </p>
+          <div className="grid grid-cols-3 gap-1">
+            {years.map(y => {
+              const inDecade = y >= decadeStart && y < decadeStart + 10
+              const isPendingStart = pendingStart === y
+              const inCommittedRange = !!committed && y >= committed.start && y <= committed.end
+              const isCommittedEdge = !!committed && (y === committed.start || y === committed.end)
+              return (
+                <button
+                  key={y}
+                  type="button"
+                  onClick={() => pickYear(y)}
+                  className={`text-xs font-semibold py-1.5 rounded-md cursor-pointer ${
+                    isPendingStart
+                      ? 'bg-[#1B3A2E] text-white ring-2 ring-[#1B3A2E]/40'
+                      : isCommittedEdge
+                        ? 'bg-[#1B3A2E] text-white'
+                        : inCommittedRange
+                          ? 'bg-[#1B3A2E]/10 text-[#1B3A2E]'
+                          : inDecade ? 'text-stone-700 hover:bg-[#F7F3ED]' : 'text-stone-300 hover:bg-[#F7F3ED]'
+                  }`}
+                >
+                  {y}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// null for blank/non-numeric so callers can tell "not entered yet" apart from 0,
+// mirroring Excel's own blank-propagates-blank behavior in these formulas.
+function numOrNull(v: string | undefined): number | null {
+  if (v === '' || v === undefined) return null
+  const n = Number(v)
+  return Number.isNaN(n) ? null : n
+}
+
+// Priority_Band thresholds — mirrors the workbook's own nested IF formula.
+function priorityBandFor(score: number): string {
+  if (score >= 4.5) return 'A – Immediate'
+  if (score >= 3.5) return 'B – High'
+  if (score >= 2.5) return 'C – Moderate'
+  return 'D – Monitor'
+}
+
+// Recomputes every field's derived value (Month_Key from its date field,
+// weighted-sum/product totals, and Risk & Priority's Priority_Score/Priority_Band)
+// after any form field changes — mirrors the workbook's own formulas. Fields must be
+// listed in dependency order (a field can only derive from fields earlier in the
+// array) since `next` threads forward through a single pass.
+function withDerivedFields(data: Record<string, string>, fields: SrmdField[]): Record<string, string> {
   let next = data
   for (const f of fields) {
-    if (!f.deriveMonthFrom) continue
-    const src = toDateInputValue(next[f.deriveMonthFrom] ?? '')
-    const derived = src ? src.slice(0, 7) : ''
-    if (next[f.key] !== derived) next = { ...next, [f.key]: derived }
+    if (f.deriveMonthFrom) {
+      const src = toDateInputValue(next[f.deriveMonthFrom] ?? '')
+      const derived = src ? src.slice(0, 7) : ''
+      if (next[f.key] !== derived) next = { ...next, [f.key]: derived }
+    }
+    if (f.deriveWeightedFrom) {
+      const nums = f.deriveWeightedFrom.map(w => numOrNull(next[w.key]))
+      let derived = ''
+      if (nums.every(n => n != null)) {
+        const sum = f.deriveWeightedFrom.reduce((acc, w, i) => acc + (nums[i] as number) * w.weight, 0)
+        const factor = Math.pow(10, f.deriveRound ?? 1)
+        derived = String(Math.round(sum * factor) / factor)
+      }
+      if (next[f.key] !== derived) next = { ...next, [f.key]: derived }
+    }
+    if (f.deriveProductFrom) {
+      const nums = f.deriveProductFrom.map(k => numOrNull(next[k]))
+      const derived = nums.every(n => n != null) ? String(nums.reduce((a, b) => (a as number) * (b as number), 1)) : ''
+      if (next[f.key] !== derived) next = { ...next, [f.key]: derived }
+    }
+    if (f.deriveCustom === 'priorityScore') {
+      const [riskScoreKey, significanceTotalKey] = f.deriveCustomFrom!
+      const risk = numOrNull(next[riskScoreKey])
+      const sig = numOrNull(next[significanceTotalKey])
+      let derived = ''
+      if (risk != null && sig != null) {
+        const val = Math.ceil(risk / 5) * 0.4 + sig * 0.6
+        derived = String(Math.round(val * 10) / 10)
+      }
+      if (next[f.key] !== derived) next = { ...next, [f.key]: derived }
+    }
+    if (f.deriveCustom === 'priorityBand') {
+      const [scoreKey] = f.deriveCustomFrom!
+      const score = numOrNull(next[scoreKey])
+      const derived = score != null ? priorityBandFor(score) : ''
+      if (next[f.key] !== derived) next = { ...next, [f.key]: derived }
+    }
   }
   return next
 }
@@ -173,7 +362,7 @@ function chipHighlight(key: string, value: unknown, slug: string): string | null
 }
 
 function FormField({
-  field, value, onChange, optionSets, customValues, canAddOption, onAddOption, onDeleteOption,
+  field, value, onChange, optionSets, customValues, canAddOption, onAddOption, onDeleteOption, objectIdOptions,
 }: {
   field: SrmdField
   value: string
@@ -183,6 +372,7 @@ function FormField({
   canAddOption: boolean
   onAddOption: (optionSetKey: string, value: string) => Promise<Option[]>
   onDeleteOption: (optionSetKey: string, value: string) => Promise<Option[]>
+  objectIdOptions: Option[]
 }) {
   const cls = 'w-full bg-white text-xs font-semibold py-1.5 px-2.5 rounded-lg border border-[#eae4da] focus:outline-none focus:ring-1 focus:ring-[#1C3D27]'
   switch (field.type) {
@@ -231,6 +421,17 @@ function FormField({
         </>
       )
     }
+    case 'object-lookup':
+      return (
+        <SearchableSelect
+          value={value}
+          onChange={onChange}
+          options={objectIdOptions}
+          placeholder="Search object ID or name…"
+          notFoundLabel={v => `${v} (not found in Inventory Master)`}
+          className={cls}
+        />
+      )
     case 'checkbox':
       return (
         <div className="inline-flex items-center gap-4 py-1.5">
@@ -239,18 +440,18 @@ function FormField({
               type="checkbox"
               checked={value === 'Yes'}
               onChange={e => onChange(e.target.checked ? 'Yes' : '')}
-              className="w-4 h-4 rounded border-[#eae4da] accent-emerald-600 cursor-pointer focus:outline-none focus:ring-1 focus:ring-emerald-600"
+              className="w-4 h-4 rounded border-[#eae4da] accent-red-600 cursor-pointer focus:outline-none focus:ring-1 focus:ring-red-600"
             />
-            <span className="text-xs font-bold text-emerald-700">Yes</span>
+            <span className="text-xs font-bold text-red-700">Yes</span>
           </label>
           <label className="inline-flex items-center gap-1.5 cursor-pointer select-none">
             <input
               type="checkbox"
               checked={value === 'No'}
               onChange={e => onChange(e.target.checked ? 'No' : '')}
-              className="w-4 h-4 rounded border-[#eae4da] accent-red-600 cursor-pointer focus:outline-none focus:ring-1 focus:ring-red-600"
+              className="w-4 h-4 rounded border-[#eae4da] accent-emerald-600 cursor-pointer focus:outline-none focus:ring-1 focus:ring-emerald-600"
             />
-            <span className="text-xs font-bold text-red-700">No</span>
+            <span className="text-xs font-bold text-emerald-700">No</span>
           </label>
         </div>
       )
@@ -258,18 +459,55 @@ function FormField({
       return <textarea value={value} onChange={e => onChange(e.target.value)} rows={2} className={`${cls} resize-none`} />
     case 'date':
       return <DateInputDMY value={value} onChange={onChange} className={cls} />
-    case 'number':
-      return <input type="number" value={value} onChange={e => onChange(e.target.value)} className={cls} />
-    case 'hidden':
-      return null
-    default:
-      if (field.deriveMonthFrom) {
+    case 'year':
+      return <YearPicker value={value} onChange={onChange} className={cls} />
+    case 'number': {
+      const derivedFrom = field.deriveWeightedFrom?.map(w => w.key) ?? field.deriveProductFrom ?? (field.deriveCustom ? field.deriveCustomFrom : undefined)
+      if (derivedFrom) {
         return (
           <input
             type="text"
             value={value}
             readOnly
-            title={`Auto-filled from ${field.deriveMonthFrom} — not editable`}
+            title={`Auto-calculated from ${derivedFrom.join(', ')} — not editable`}
+            className={`${cls} bg-stone-100 text-stone-500 cursor-not-allowed`}
+          />
+        )
+      }
+      return (
+        <input
+          type="number"
+          value={value}
+          min={field.min}
+          max={field.max}
+          onChange={e => {
+            const raw = e.target.value
+            // min/max on <input type="number"> only style validity + the spinner
+            // arrows — they don't stop the user from typing an out-of-range value,
+            // so a value outside the field's range is rejected here instead (the
+            // keystroke is dropped; the input just doesn't change).
+            if (raw !== '' && raw !== '-') {
+              const num = Number(raw)
+              if (Number.isNaN(num)) return
+              if (field.min != null && num < field.min) return
+              if (field.max != null && num > field.max) return
+            }
+            onChange(raw)
+          }}
+          className={cls}
+        />
+      )
+    }
+    case 'hidden':
+      return null
+    default:
+      if (field.deriveMonthFrom || field.deriveCustom === 'priorityBand') {
+        return (
+          <input
+            type="text"
+            value={value}
+            readOnly
+            title={`Auto-filled from ${field.deriveMonthFrom ?? field.deriveCustomFrom?.join(', ')} — not editable`}
             className={`${cls} bg-stone-100 text-stone-500 cursor-not-allowed`}
           />
         )
@@ -310,6 +548,7 @@ const SrmdSheetView = React.forwardRef<SrmdSheetViewHandle, { slug: string }>(fu
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [previewImg, setPreviewImg] = useState<string | null>(null)
+  const [objectIdOptions, setObjectIdOptions] = useState<Option[]>([])
   const PAGE_SIZE = 30
 
   const selectFields = config.fields.filter(f => f.type === 'select')
@@ -337,6 +576,11 @@ const SrmdSheetView = React.forwardRef<SrmdSheetViewHandle, { slug: string }>(fu
   useEffect(() => { load() }, [load])
   useEffect(() => { setFilterValues({}); setQ(''); setSelected(null) }, [slug])
 
+  useEffect(() => {
+    if (!config.fields.some(f => f.type === 'object-lookup')) return
+    fetch('/api/srmd/inventory/object-ids').then(r => r.json()).then(d => setObjectIdOptions(d.options || [])).catch(() => {})
+  }, [config])
+
   function openAdd() {
     setEditingId(null)
     const today = new Date().toISOString().slice(0, 10)
@@ -344,7 +588,7 @@ const SrmdSheetView = React.forwardRef<SrmdSheetViewHandle, { slug: string }>(fu
       ...emptyFormData,
       ...Object.fromEntries(config.fields.filter(f => f.defaultToday).map(f => [f.key, today])),
     }
-    setFormData(withDerivedMonthKeys(withToday, config.fields))
+    setFormData(withDerivedFields(withToday, config.fields))
     setFormError(null)
     setFormOpen(true)
   }
@@ -354,7 +598,7 @@ const SrmdSheetView = React.forwardRef<SrmdSheetViewHandle, { slug: string }>(fu
   function openEdit(item: Doc) {
     setEditingId(item._id)
     const fromItem = Object.fromEntries(config.fields.map(f => [f.key, item[f.key] != null ? String(item[f.key]) : '']))
-    setFormData(withDerivedMonthKeys(fromItem, config.fields))
+    setFormData(withDerivedFields(fromItem, config.fields))
     setFormError(null)
     setFormOpen(true)
   }
@@ -809,6 +1053,7 @@ const SrmdSheetView = React.forwardRef<SrmdSheetViewHandle, { slug: string }>(fu
                             canAddOption={canEdit}
                             onAddOption={addOption}
                             onDeleteOption={deleteOption}
+                            objectIdOptions={objectIdOptions}
                           />
                         </div>
                       )
@@ -821,12 +1066,13 @@ const SrmdSheetView = React.forwardRef<SrmdSheetViewHandle, { slug: string }>(fu
                         <FormField
                           field={f}
                           value={formData[f.key] ?? ''}
-                          onChange={val => setFormData(p => withDerivedMonthKeys({ ...p, [f.key]: val }, config.fields))}
+                          onChange={val => setFormData(p => withDerivedFields({ ...p, [f.key]: val }, config.fields))}
                           optionSets={optionSets}
                           customValues={customValues}
                           canAddOption={canEdit}
                           onAddOption={addOption}
                           onDeleteOption={deleteOption}
+                          objectIdOptions={objectIdOptions}
                         />
                       </div>
                     )

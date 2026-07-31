@@ -6,7 +6,7 @@
 
 import {
   RECORD_LEVEL_OPTIONS, COLLECTION_TYPE_OPTIONS, ACCESS_LEVEL_OPTIONS, SURVEY_STATUS_OPTIONS,
-  OVERALL_CONDITION_OPTIONS, RISK_TYPE_OPTIONS, PRIORITY_BAND_OPTIONS,
+  OVERALL_CONDITION_OPTIONS, RISK_TYPE_OPTIONS,
   USER_OPTIONS, PHOTO_VIEW_OPTIONS, ALL_DAMAGE_TERMS, type Option,
 } from '@/lib/srmdLists'
 import {
@@ -23,11 +23,20 @@ export interface SrmdColumn {
 // 'select'  → rigid <select> from a closed option list
 // 'combo'   → free-text input with a <datalist> of suggestions (workbook explicitly
 //             allows free text in these — e.g. "type any name, dropdowns don't block it")
+// 'object-lookup' → rigid <select> of every Object_ID that exists in Inventory Master
+//             (fetched live, not a fixed list) — used by sheets that reference an
+//             inventory object by ID (Condition Assessment, Risk & Priority) so the
+//             user picks an existing object instead of retyping its ID by hand.
+//             Inventory Master's own Object_ID field stays plain 'text', since that's
+//             where the ID is created.
+// 'year' → year-only picker (a decade grid, not a full day/month/year calendar) —
+//          for fields like Inventory Master's Date_or_Period where only the year
+//          matters
 // 'textarea', 'date', 'number', 'text' → plain inputs
 export interface SrmdField {
   key: string
   label: string
-  type: 'text' | 'textarea' | 'date' | 'number' | 'select' | 'combo' | 'image' | 'hidden' | 'checkbox'
+  type: 'text' | 'textarea' | 'date' | 'year' | 'number' | 'select' | 'combo' | 'image' | 'hidden' | 'checkbox' | 'object-lookup'
   options?: Option[]
   // For 'select'/'combo' fields backed by a shared, user-extensible option list —
   // see lib/dropdown-option-sets.ts. Fields without this key show a fixed list only.
@@ -40,6 +49,29 @@ export interface SrmdField {
   // date field, blank when that date is blank. Read-only in the form since it's
   // computed, not entered.
   deriveMonthFrom?: string
+  // For 'number' fields on a fixed rating scale (e.g. Condition Assessment's 1–5
+  // severity scores) — enforced both in the form input and server-side in the API,
+  // since the input's own min/max attributes only guide the browser's spinner/native
+  // validation and don't block a value typed or pasted in directly.
+  min?: number
+  max?: number
+  // For 'number' fields computed as a weighted sum of other number fields — mirrors
+  // the workbook's own formula (e.g. Risk & Priority's Significance_Total:
+  // =IF(COUNTA(E3:H3)=4,ROUND((E3*0.4)+(F3*0.25)+(G3*0.2)+(H3*0.15),1),"")). Blank
+  // unless every contributing field has a value, rounded to `deriveRound` decimals.
+  // Read-only in the form since it's computed, not entered.
+  deriveWeightedFrom?: { key: string; weight: number }[]
+  deriveRound?: number
+  // For 'number' fields computed as the product of other number fields — mirrors
+  // the workbook's own formula (e.g. Risk & Priority's Risk_Score:
+  // =IF(OR(K3="",L3=""),"",K3*L3)). Blank unless every contributing field has a value.
+  deriveProductFrom?: string[]
+  // For fields computed by one of a small set of named, sheet-specific formulas that
+  // don't fit the generic shapes above (e.g. Risk & Priority's Priority_Score and
+  // Priority_Band, each with their own workbook formula). `deriveCustomFrom` lists the
+  // source field keys in the order each named formula expects them.
+  deriveCustom?: 'priorityScore' | 'priorityBand'
+  deriveCustomFrom?: string[]
 }
 
 export interface SrmdSheetConfig {
@@ -68,12 +100,24 @@ export interface SrmdSheetConfig {
 const t = (key: string, label: string, opts?: { deriveMonthFrom?: string }): SrmdField => ({ key, label, type: 'text', ...opts })
 const ta = (key: string, label: string): SrmdField => ({ key, label, type: 'textarea' })
 const d = (key: string, label: string, opts?: { defaultToday?: boolean }): SrmdField => ({ key, label, type: 'date', ...opts })
+const year = (key: string, label: string): SrmdField => ({ key, label, type: 'year' })
 const n = (key: string, label: string): SrmdField => ({ key, label, type: 'number' })
+const score = (key: string, label: string, min: number, max: number): SrmdField =>
+  ({ key, label: `${label} (${min}–${max})`, type: 'number', min, max })
+const weightedTotal = (key: string, label: string, from: { key: string; weight: number }[], round = 1): SrmdField =>
+  ({ key, label, type: 'number', deriveWeightedFrom: from, deriveRound: round })
+const productOf = (key: string, label: string, from: string[]): SrmdField =>
+  ({ key, label, type: 'number', deriveProductFrom: from })
+// Priority_Score = ROUND(ROUNDUP(Risk_Score / 5, 0) * 0.4 + Significance_Total * 0.6, 1)
+const priorityScoreFrom = (key: string, label: string, riskScoreKey: string, significanceTotalKey: string): SrmdField =>
+  ({ key, label, type: 'number', deriveCustom: 'priorityScore', deriveCustomFrom: [riskScoreKey, significanceTotalKey] })
+// Priority_Band = A/B/C/D band name for a Priority_Score value
+const priorityBandFrom = (key: string, label: string, priorityScoreKey: string): SrmdField =>
+  ({ key, label, type: 'text', deriveCustom: 'priorityBand', deriveCustomFrom: [priorityScoreKey] })
 const sel = (key: string, label: string, options: Option[], optionSetKey?: string): SrmdField =>
   ({ key, label, type: 'select', options, optionSetKey })
-const combo = (key: string, label: string, options: Option[], optionSetKey?: string): SrmdField =>
-  ({ key, label, type: 'combo', options, optionSetKey })
 const yesNo = (key: string, label: string): SrmdField => ({ key, label, type: 'checkbox' })
+const objectLookup = (key: string, label: string): SrmdField => ({ key, label, type: 'object-lookup' })
 const image = (key: string, label: string): SrmdField => ({ key, label, type: 'image' })
 // Tracked in formData/saved like any other field, but never rendered in the add/edit
 // form or shown in the detail drawer — used for the Photo Log's cached thumbnail.
@@ -103,9 +147,9 @@ export const SRMD_SHEETS: SrmdSheetConfig[] = [
       t('Object_Name', 'Object Name'), t('Alternate_Title', 'Alternate Title'),
       ta('Brief_Description', 'Brief Description'),
       t('Material_Primary', 'Material (Primary)'), t('Material_Secondary', 'Material (Secondary)'),
-      t('Technique_or_Process', 'Technique / Process'), t('Date_or_Period', 'Date / Period'),
-      t('Existing_Accession_No', 'Existing Accession No.'), t('Legacy_or_Previous_No', 'Legacy / Previous No.'),
-      n('Quantity', 'Quantity'), n('Part_Count', 'Part Count'),
+      t('Technique_or_Process', 'Technique / Process'), year('Date_or_Period', 'Date / Period'),
+      t('Existing_Accession_No', 'Existing Accession No.'), t('Legacy_or_Previous_No', 'Previous No.'),
+      n('Quantity', 'Quantity'), n('Part_Count', 'Part/Page Count'),
       n('Dimensions_L_cm', 'Length (cm)'), n('Dimensions_W_cm', 'Width (cm)'), n('Dimensions_H_or_D_cm', 'Height/Depth (cm)'),
       ta('Inscription_or_Markings', 'Inscription / Markings'), ta('Cultural_or_Associative_Note', 'Cultural / Associative Note'),
       t('Current_Location_ID', 'Current Location ID'),
@@ -130,16 +174,16 @@ export const SRMD_SHEETS: SrmdSheetConfig[] = [
       { key: 'Immediate_Stabilization_Needed', label: 'Urgent?' },
     ],
     fields: [
-      t('Condition_ID', 'Condition ID'), t('Object_ID', 'Object ID'),
+      t('Condition_ID', 'Condition ID'), objectLookup('Object_ID', 'Object ID'),
       d('Assessment_Date', 'Assessment Date', { defaultToday: true }), sel('Assessor', 'Assessor', USER_OPTIONS, 'USERS'),
       sel('Assessment_Type', 'Assessment Type', ASSESSMENT_TYPE_OPTIONS, 'ASSESSMENT_TYPE'),
-      n('Support_Structure_Score', 'Support Structure Score'), n('Surface_Soil_Score', 'Surface Soil Score'),
-      n('Tear_Split_Loss_Score', 'Tear/Split/Loss Score'), n('Discoloration_Stain_Score', 'Discoloration/Stain Score'),
-      n('Biological_Activity_Score', 'Biological Activity Score'), n('Chemical_Deterioration_Score', 'Chemical Deterioration Score'),
-      n('Handling_Vulnerability_Score', 'Handling Vulnerability Score'),
-      combo('Primary_Damage_Term_1', 'Primary Damage Term 1', ALL_DAMAGE_TERMS.map(v => ({ value: v, label: v })), 'DAMAGE_TERMS'),
-      combo('Primary_Damage_Term_2', 'Primary Damage Term 2', ALL_DAMAGE_TERMS.map(v => ({ value: v, label: v })), 'DAMAGE_TERMS'),
-      combo('Primary_Damage_Term_3', 'Primary Damage Term 3', ALL_DAMAGE_TERMS.map(v => ({ value: v, label: v })), 'DAMAGE_TERMS'),
+      score('Support_Structure_Score', 'Support Structure Score', 1, 5), score('Surface_Soil_Score', 'Surface Soil Score', 1, 5),
+      score('Tear_Split_Loss_Score', 'Tear/Split/Loss Score', 1, 5), score('Discoloration_Stain_Score', 'Discoloration/Stain Score', 1, 5),
+      score('Biological_Activity_Score', 'Biological Activity Score', 1, 5), score('Chemical_Deterioration_Score', 'Chemical Deterioration Score', 1, 5),
+      score('Handling_Vulnerability_Score', 'Handling Vulnerability Score', 1, 5),
+      sel('Primary_Damage_Term_1', 'Primary Damage Term 1', ALL_DAMAGE_TERMS.map(v => ({ value: v, label: v })), 'DAMAGE_TERMS'),
+      sel('Primary_Damage_Term_2', 'Primary Damage Term 2', ALL_DAMAGE_TERMS.map(v => ({ value: v, label: v })), 'DAMAGE_TERMS'),
+      sel('Primary_Damage_Term_3', 'Primary Damage Term 3', ALL_DAMAGE_TERMS.map(v => ({ value: v, label: v })), 'DAMAGE_TERMS'),
       sel('Overall_Condition', 'Overall Condition', OVERALL_CONDITION_OPTIONS, 'OVERALL_CONDITION'),
       yesNo('Immediate_Stabilization_Needed', 'Immediate Stabilization Needed'),
       yesNo('Quarantine_Flag', 'Quarantine Flag'),
@@ -162,15 +206,21 @@ export const SRMD_SHEETS: SrmdSheetConfig[] = [
       { key: 'Recommended_Action_Window', label: 'Action Window' },
     ],
     fields: [
-      t('Risk_ID', 'Risk ID'), t('Object_ID', 'Object ID'),
+      t('Risk_ID', 'Risk ID'), objectLookup('Object_ID', 'Object ID'),
       d('Assessment_Date', 'Assessment Date', { defaultToday: true }), sel('Assessor', 'Assessor', USER_OPTIONS, 'USERS'),
-      n('Spiritual_Significance', 'Spiritual Significance (1–5)'), n('Historical_Significance', 'Historical Significance (1–5)'),
-      n('Research_Value', 'Research Value (1–5)'), n('Display_Value', 'Display Value (1–5)'),
-      n('Significance_Total', 'Significance Total'),
+      score('Spiritual_Significance', 'Spiritual Significance', 1, 5), score('Historical_Significance', 'Historical Significance', 1, 5),
+      score('Research_Value', 'Research Value', 1, 5), score('Display_Value', 'Display Value', 1, 5),
+      weightedTotal('Significance_Total', 'Significance Total', [
+        { key: 'Spiritual_Significance', weight: 0.4 },
+        { key: 'Historical_Significance', weight: 0.25 },
+        { key: 'Research_Value', weight: 0.2 },
+        { key: 'Display_Value', weight: 0.15 },
+      ]),
       sel('Primary_Risk_Type', 'Primary Risk Type', RISK_TYPE_OPTIONS, 'RISK_TYPE'),
-      n('Severity', 'Severity (1–5)'), n('Likelihood', 'Likelihood (1–5)'),
-      n('Risk_Score', 'Risk Score'), n('Priority_Score', 'Priority Score'),
-      sel('Priority_Band', 'Priority Band', PRIORITY_BAND_OPTIONS, 'PRIORITY_BAND'),
+      score('Severity', 'Severity', 1, 5), score('Likelihood', 'Likelihood', 1, 5),
+      productOf('Risk_Score', 'Risk Score', ['Severity', 'Likelihood']),
+      priorityScoreFrom('Priority_Score', 'Priority Score', 'Risk_Score', 'Significance_Total'),
+      priorityBandFrom('Priority_Band', 'Priority Band', 'Priority_Score'),
       t('Recommended_Action_Window', 'Recommended Action Window'),
       ta('Recommended_Action', 'Recommended Action'), t('Month_Key', 'Month Key', { deriveMonthFrom: 'Assessment_Date' }),
     ],
