@@ -42,6 +42,23 @@ export default function CollectionsVaultView() {
     return () => window.removeEventListener('resize', updateScrollFades)
   }, [updateScrollFades])
 
+  // A plain mouse wheel reports vertical movement (deltaY), which this row — having
+  // no vertical overflow — otherwise just ignores, so scrolling over the tabs did
+  // nothing. Redirect that vertical delta into horizontal scroll (a trackpad's own
+  // horizontal swipe already arrives as deltaX and passes through untouched).
+  useEffect(() => {
+    const el = tabScrollRef.current
+    if (!el) return
+    function handleWheel(e: WheelEvent) {
+      if (Math.abs(e.deltaY) > Math.abs(e.deltaX) && el!.scrollWidth > el!.clientWidth) {
+        e.preventDefault()
+        el!.scrollLeft += e.deltaY
+      }
+    }
+    el.addEventListener('wheel', handleWheel, { passive: false })
+    return () => el.removeEventListener('wheel', handleWheel)
+  }, [])
+
   const { data: session } = useSession()
   const role = (session?.user as { role?: string } | undefined)?.role
   const permissions = (session?.user as { permissions?: ViewPermissions | null } | undefined)?.permissions

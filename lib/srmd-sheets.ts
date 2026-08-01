@@ -89,6 +89,11 @@ export interface SrmdSheetConfig {
   // Object_ID itself to be unique (i.e. only one record per object, ever).
   uniqueFields?: string[]
   groupBy?: string
+  // Enables the card grid's "Group by" control, offering every one of this sheet's
+  // add-form fields (anything not 'hidden') as a way to cluster the grid into
+  // collapsible sections instead of always showing a flat list. Distinct from
+  // `groupBy` above, which is a fixed sort-order grouping the user can't change.
+  groupable?: boolean
   columns: SrmdColumn[]
   fields: SrmdField[]
   titleField: string
@@ -130,6 +135,7 @@ export const SRMD_SHEETS: SrmdSheetConfig[] = [
     searchFields: ['Object_ID', 'Object_Name', 'Alternate_Title', 'Material_Primary', 'Existing_Accession_No'],
     sortField: 'Object_ID', sortDir: 1, objectIdField: 'Object_ID', uniqueFields: ['Object_ID'],
     titleField: 'Object_Name', subtitleField: 'Object_ID',
+    groupable: true,
     columns: [
       { key: 'Object_ID', label: 'Object ID' },
       { key: 'Object_Name', label: 'Object Name' },
@@ -141,8 +147,8 @@ export const SRMD_SHEETS: SrmdSheetConfig[] = [
     ],
     fields: [
       t('Object_ID', 'Object ID'), t('Parent_ID', 'Parent ID'),
-      sel('Record_Level_1', 'Record Level 1', RECORD_LEVEL_OPTIONS, 'RECORD_LEVEL'),
-      sel('Record_Level_2', 'Record Level 2', RECORD_LEVEL_2_OPTIONS, 'RECORD_LEVEL_2'),
+      sel('Record_Level_1', 'Archival Level', RECORD_LEVEL_OPTIONS, 'RECORD_LEVEL'),
+      sel('Record_Level_2', 'Document Type', RECORD_LEVEL_2_OPTIONS, 'RECORD_LEVEL_2'),
       sel('Collection_Type', 'Collection Type', COLLECTION_TYPE_OPTIONS, 'COLLECTION_TYPE'),
       t('Object_Name', 'Object Name'), t('Alternate_Title', 'Alternate Title'),
       ta('Brief_Description', 'Brief Description'),
@@ -165,6 +171,7 @@ export const SRMD_SHEETS: SrmdSheetConfig[] = [
     searchFields: ['Condition_ID', 'Object_ID', 'Assessor', 'Condition_Summary'],
     sortField: 'Assessment_Date', sortDir: -1, objectIdField: 'Object_ID', uniqueFields: ['Condition_ID', 'Object_ID'],
     titleField: 'Object_ID', subtitleField: 'Assessment_Date', badgeField: 'Overall_Condition',
+    groupable: true,
     columns: [
       { key: 'Condition_ID', label: 'Condition ID' },
       { key: 'Object_ID', label: 'Object ID' },
@@ -197,6 +204,7 @@ export const SRMD_SHEETS: SrmdSheetConfig[] = [
     searchFields: ['Object_ID', 'Assessor', 'Primary_Risk_Type', 'Recommended_Action'],
     sortField: 'Priority_Score', sortDir: -1, objectIdField: 'Object_ID', uniqueFields: ['Risk_ID', 'Object_ID'],
     titleField: 'Object_ID', subtitleField: 'Primary_Risk_Type', badgeField: 'Priority_Band',
+    groupable: true,
     columns: [
       { key: 'Object_ID', label: 'Object ID' },
       { key: 'Primary_Risk_Type', label: 'Risk Type' },

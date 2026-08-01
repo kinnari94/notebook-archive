@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import { useSession } from 'next-auth/react'
-import { Search, Filter, Loader2, X, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Edit2, Trash2, Check, Archive, Image as ImageIcon, AlertTriangle, Calendar } from 'lucide-react'
+import { Search, Filter, Loader2, X, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Edit2, Trash2, Check, Archive, Image as ImageIcon, AlertTriangle, Calendar, Layers } from 'lucide-react'
 import { getSrmdSheet, type SrmdField } from '@/lib/srmd-sheets'
 import {
   OVERALL_CONDITION_META, PRIORITY_BAND_META, ACCESS_LEVEL_META, SURVEY_STATUS_META, PHOTO_VIEW_META,
@@ -549,9 +549,15 @@ const SrmdSheetView = React.forwardRef<SrmdSheetViewHandle, { slug: string }>(fu
   const [uploading, setUploading] = useState(false)
   const [previewImg, setPreviewImg] = useState<string | null>(null)
   const [objectIdOptions, setObjectIdOptions] = useState<Option[]>([])
+  const [groupByKey, setGroupByKey] = useState('')
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
   const PAGE_SIZE = 30
+  // When grouping is active, sections need every matching record at once — paginating
+  // first and grouping only the current page would show incomplete, confusing groups.
+  const GROUPED_LIMIT = 2000
 
   const selectFields = config.fields.filter(f => f.type === 'select')
+  const groupableFieldList = config.groupable ? config.fields.filter(f => f.type !== 'hidden') : []
   const activeFilterCount = Object.values(filterValues).filter(Boolean).length
 
   const load = useCallback(async () => {
@@ -559,8 +565,8 @@ const SrmdSheetView = React.forwardRef<SrmdSheetViewHandle, { slug: string }>(fu
     const params = new URLSearchParams()
     if (q) params.set('q', q)
     for (const [k, v] of Object.entries(filterValues)) if (v) params.set(k, v)
-    params.set('limit', String(PAGE_SIZE))
-    params.set('skip', String((page - 1) * PAGE_SIZE))
+    params.set('limit', String(groupByKey ? GROUPED_LIMIT : PAGE_SIZE))
+    params.set('skip', String(groupByKey ? 0 : (page - 1) * PAGE_SIZE))
     try {
       const d = await fetch(`/api/srmd/${slug}?${params}`).then(r => r.json())
       const fresh: Doc[] = d.items || []
@@ -570,11 +576,12 @@ const SrmdSheetView = React.forwardRef<SrmdSheetViewHandle, { slug: string }>(fu
     } finally {
       setLoading(false)
     }
-  }, [slug, q, filterValues, page])
+  }, [slug, q, filterValues, page, groupByKey])
 
-  useEffect(() => { setPage(1) }, [q, filterValues])
+  useEffect(() => { setPage(1) }, [q, filterValues, groupByKey])
   useEffect(() => { load() }, [load])
-  useEffect(() => { setFilterValues({}); setQ(''); setSelected(null) }, [slug])
+  useEffect(() => { setFilterValues({}); setQ(''); setSelected(null); setGroupByKey('') }, [slug])
+  useEffect(() => { setExpandedGroups(new Set()) }, [groupByKey, slug])
 
   useEffect(() => {
     if (!config.fields.some(f => f.type === 'object-lookup')) return
@@ -671,6 +678,119 @@ const SrmdSheetView = React.forwardRef<SrmdSheetViewHandle, { slug: string }>(fu
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const chipColumns = config.columns.filter(c => c.key !== config.titleField && c.key !== config.subtitleField)
 
+  const groupField = groupByKey ? config.fields.find(f => f.key === groupByKey) : undefined
+  const groupOptions = groupField
+    ? (groupField.optionSetKey ? optionSets[groupField.optionSetKey] : undefined) ?? groupField.options ?? []
+    : []
+
+  // Sections ordered by the field's own option order (falls back to alphabetical for
+  // values with no defined order — which happens to already read A→D for Priority_Band's
+  // "A – Immediate" … "D – Monitor" labels), blank values grouped last under "Not set".
+  const groups = React.useMemo(() => {
+    if (!groupByKey) return null
+    const map = new Map<string, Doc[]>()
+    for (const item of items) {
+      const raw = item[groupByKey]
+      const key = raw == null || raw === '' ? '' : String(raw)
+      if (!map.has(key)) map.set(key, [])
+      map.get(key)!.push(item)
+    }
+    const known = groupOptions.map(o => o.value).filter(v => map.has(v))
+    const rest = [...map.keys()].filter(k => k !== '' && !known.includes(k)).sort()
+    const order = [...known, ...rest, ...(map.has('') ? [''] : [])]
+    return order.map(key => ({
+      key,
+      label: key === '' ? 'Not set' : (groupOptions.find(o => o.value === key)?.label ?? key),
+      items: map.get(key)!,
+    }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groupByKey, items])
+
+  function renderCard(item: Doc) {
+    const focused = selected?._id === item._id
+    const badgeVal = config.badgeField ? item[config.badgeField] : null
+    const bMeta = badgeMetaFor(config.badgeField, badgeVal)
+    return (
+      <motion.div
+        key={item._id}
+        layout
+        initial={{ opacity: 0, scale: 0.95, filter: 'blur(8px)' }}
+        animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
+        transition={{ duration: 0.4, ease: 'circInOut', type: 'spring' }}
+        whileHover={{ y: -4 }}
+        onClick={() => setSelected(focused ? null : item)}
+        className={`bg-white rounded-xl border transition-shadow duration-200 cursor-pointer overflow-hidden group flex flex-col justify-between shadow-[0_1px_3px_rgba(27,58,46,0.08),0_1px_2px_rgba(27,58,46,0.05)] ${
+          focused
+            ? 'border-[#1B3A2E] ring-1 ring-[#1B3A2E] shadow-[0_8px_24px_rgba(27,58,46,0.16)]'
+            : 'border-[#E8E3DB] hover:border-[#1B3A2E]/40 hover:shadow-[0_10px_28px_rgba(27,58,46,0.14)]'
+        }`}
+      >
+        {config.imageField && (
+          <div className="h-36 w-full overflow-hidden bg-stone-100 shrink-0">
+            {String(item.Photo_Thumbnail || item[config.imageField] || '').trim() ? (
+              <img
+                src={String(item.Photo_Thumbnail || item[config.imageField]).trim()}
+                alt={formatVal(item[config.titleField])}
+                className="w-full h-full object-cover"
+                referrerPolicy="no-referrer"
+                onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-stone-300">
+                <ImageIcon className="w-6 h-6" />
+              </div>
+            )}
+          </div>
+        )}
+        <div className="p-5 space-y-3 flex-1">
+          <div className="flex items-start justify-between gap-2">
+            <h4 className="font-serif font-semibold text-stone-900 text-base sm:text-lg leading-snug group-hover:text-[#1B3A2E] transition-colors">
+              {formatVal(item[config.titleField])}
+            </h4>
+            {badgeVal != null && badgeVal !== '' && (
+              <span className={`shrink-0 px-2.5 py-1 rounded-md font-mono text-[11px] font-bold uppercase tracking-wider border ${bMeta?.badge || 'bg-gray-50 text-gray-700 border-gray-200'}`}>
+                {String(badgeVal)}
+              </span>
+            )}
+          </div>
+          {config.subtitleField && (
+            <p className="text-stone-600 text-sm font-mono font-medium">{formatVal(item[config.subtitleField])}</p>
+          )}
+          {chipColumns.length > 0 && (
+            <div className="grid grid-cols-2 gap-x-3 gap-y-2.5 pt-3 mt-1 border-t border-stone-200 text-sm">
+              {chipColumns.map(c => {
+                const raw = item[c.key]
+                const hi = chipHighlight(c.key, raw, slug)
+                return (
+                  <div key={c.key} className="min-w-0 overflow-hidden">
+                    <span className="text-stone-500 text-[11px] uppercase font-mono font-semibold tracking-wide block mb-0.5">{c.label}</span>
+                    {hi ? (
+                      <span className={`inline-block max-w-full truncate px-1.5 py-0.5 rounded font-bold text-[11px] uppercase tracking-wide border ${hi}`}>
+                        {formatVal(raw)}
+                      </span>
+                    ) : (
+                      <span className="text-stone-800 font-semibold truncate block">{formatVal(raw)}</span>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+        {canEdit && (
+          <div className="bg-stone-50 border-t border-stone-200 py-2 px-4 flex items-center justify-end gap-1.5 opacity-80 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+            <button onClick={e => { e.stopPropagation(); openEdit(item) }} className="p-1.5 hover:bg-stone-200 text-stone-500 hover:text-stone-900 rounded-md transition-colors" title="Edit">
+              <Edit2 className="w-3.5 h-3.5" />
+            </button>
+            <button onClick={e => handleDelete(item._id, e)} className="p-1.5 hover:bg-red-50 text-stone-500 hover:text-red-600 rounded-md transition-colors" title="Delete">
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+      </motion.div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-[#F7F3ED] text-[#1B3A2E] pb-16 font-sans">
       <div className="px-4 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-6 sm:space-y-8">
@@ -702,6 +822,21 @@ const SrmdSheetView = React.forwardRef<SrmdSheetViewHandle, { slug: string }>(fu
                 {filtersOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                 {activeFilterCount > 0 && <span className="w-1.5 h-1.5 rounded-full bg-[#E8673A]" />}
               </button>
+            )}
+            {groupableFieldList.length > 0 && (
+              <div className="relative">
+                <Layers className={`absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none ${groupByKey ? 'text-white/70' : 'text-[#1B3A2E]/40'}`} />
+                <select
+                  value={groupByKey}
+                  onChange={e => setGroupByKey(e.target.value)}
+                  className={`pl-8 pr-7 py-2 rounded-lg border text-xs font-semibold cursor-pointer appearance-none focus:outline-none focus:ring-1 focus:ring-[#1B3A2E]/30 ${
+                    groupByKey ? 'bg-[#1B3A2E] border-[#1B3A2E] text-white' : 'bg-[#F7F3ED] border-[#E8E3DB] text-[#1B3A2E]/70 hover:bg-[#E8E3DB]'
+                  }`}
+                >
+                  <option value="">Group by…</option>
+                  {groupableFieldList.map(f => <option key={f.key} value={f.key}>{f.label}</option>)}
+                </select>
+              </div>
             )}
           </div>
 
@@ -742,97 +877,44 @@ const SrmdSheetView = React.forwardRef<SrmdSheetViewHandle, { slug: string }>(fu
               Refine your search or filters, or add a new entry.
             </p>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5">
-            {items.map(item => {
-              const focused = selected?._id === item._id
-              const badgeVal = config.badgeField ? item[config.badgeField] : null
-              const bMeta = badgeMetaFor(config.badgeField, badgeVal)
+        ) : groups ? (
+          <div className="space-y-3">
+            {groups.map(g => {
+              const isOpen = expandedGroups.has(g.key)
               return (
-                <motion.div
-                  key={item._id}
-                  layout
-                  initial={{ opacity: 0, scale: 0.95, filter: 'blur(8px)' }}
-                  animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
-                  transition={{ duration: 0.4, ease: 'circInOut', type: 'spring' }}
-                  whileHover={{ y: -4 }}
-                  onClick={() => setSelected(focused ? null : item)}
-                  className={`bg-white rounded-xl border transition-shadow duration-200 cursor-pointer overflow-hidden group flex flex-col justify-between shadow-[0_1px_3px_rgba(27,58,46,0.08),0_1px_2px_rgba(27,58,46,0.05)] ${
-                    focused
-                      ? 'border-[#1B3A2E] ring-1 ring-[#1B3A2E] shadow-[0_8px_24px_rgba(27,58,46,0.16)]'
-                      : 'border-[#E8E3DB] hover:border-[#1B3A2E]/40 hover:shadow-[0_10px_28px_rgba(27,58,46,0.14)]'
-                  }`}
-                >
-                  {config.imageField && (
-                    <div className="h-36 w-full overflow-hidden bg-stone-100 shrink-0">
-                      {String(item.Photo_Thumbnail || item[config.imageField] || '').trim() ? (
-                        <img
-                          src={String(item.Photo_Thumbnail || item[config.imageField]).trim()}
-                          alt={formatVal(item[config.titleField])}
-                          className="w-full h-full object-cover"
-                          referrerPolicy="no-referrer"
-                          onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-stone-300">
-                          <ImageIcon className="w-6 h-6" />
-                        </div>
-                      )}
+                <div key={g.key || '__blank__'} className="bg-white border border-[#E8E3DB] rounded-xl overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setExpandedGroups(prev => {
+                      const next = new Set(prev)
+                      if (next.has(g.key)) next.delete(g.key); else next.add(g.key)
+                      return next
+                    })}
+                    className="w-full flex items-center gap-2 px-4 py-3 cursor-pointer hover:bg-[#F7F3ED]/60 transition-colors text-left"
+                  >
+                    {isOpen ? <ChevronDown className="w-4 h-4 text-[#1B3A2E]/50 shrink-0" /> : <ChevronRight className="w-4 h-4 text-[#1B3A2E]/50 shrink-0" />}
+                    <h3 className="font-serif font-bold text-sm sm:text-base text-[#1B3A2E]">{g.label}</h3>
+                    <span className="text-[10px] font-mono font-semibold text-[#1B3A2E]/50 bg-[#1B3A2E]/5 px-1.5 py-0.5 rounded">
+                      {g.items.length}
+                    </span>
+                  </button>
+                  {isOpen && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5 p-4 pt-1 border-t border-[#E8E3DB]">
+                      {g.items.map(renderCard)}
                     </div>
                   )}
-                  <div className="p-5 space-y-3 flex-1">
-                    <div className="flex items-start justify-between gap-2">
-                      <h4 className="font-serif font-semibold text-stone-900 text-base sm:text-lg leading-snug group-hover:text-[#1B3A2E] transition-colors">
-                        {formatVal(item[config.titleField])}
-                      </h4>
-                      {badgeVal != null && badgeVal !== '' && (
-                        <span className={`shrink-0 px-2.5 py-1 rounded-md font-mono text-[11px] font-bold uppercase tracking-wider border ${bMeta?.badge || 'bg-gray-50 text-gray-700 border-gray-200'}`}>
-                          {String(badgeVal)}
-                        </span>
-                      )}
-                    </div>
-                    {config.subtitleField && (
-                      <p className="text-stone-600 text-sm font-mono font-medium">{formatVal(item[config.subtitleField])}</p>
-                    )}
-                    {chipColumns.length > 0 && (
-                      <div className="grid grid-cols-2 gap-x-3 gap-y-2.5 pt-3 mt-1 border-t border-stone-200 text-sm">
-                        {chipColumns.map(c => {
-                          const raw = item[c.key]
-                          const hi = chipHighlight(c.key, raw, slug)
-                          return (
-                            <div key={c.key} className="min-w-0 overflow-hidden">
-                              <span className="text-stone-500 text-[11px] uppercase font-mono font-semibold tracking-wide block mb-0.5">{c.label}</span>
-                              {hi ? (
-                                <span className={`inline-block max-w-full truncate px-1.5 py-0.5 rounded font-bold text-[11px] uppercase tracking-wide border ${hi}`}>
-                                  {formatVal(raw)}
-                                </span>
-                              ) : (
-                                <span className="text-stone-800 font-semibold truncate block">{formatVal(raw)}</span>
-                              )}
-                            </div>
-                          )
-                        })}
-                      </div>
-                    )}
-                  </div>
-                  {canEdit && (
-                    <div className="bg-stone-50 border-t border-stone-200 py-2 px-4 flex items-center justify-end gap-1.5 opacity-80 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                      <button onClick={e => { e.stopPropagation(); openEdit(item) }} className="p-1.5 hover:bg-stone-200 text-stone-500 hover:text-stone-900 rounded-md transition-colors" title="Edit">
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </button>
-                      <button onClick={e => handleDelete(item._id, e)} className="p-1.5 hover:bg-red-50 text-stone-500 hover:text-red-600 rounded-md transition-colors" title="Delete">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  )}
-                </motion.div>
+                </div>
               )
             })}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5">
+            {items.map(renderCard)}
           </div>
         )}
 
         {/* Pagination */}
-        {!loading && total > PAGE_SIZE && (
+        {!loading && !groupByKey && total > PAGE_SIZE && (
           <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
             <span className="text-xs font-mono font-medium text-[#1B3A2E]/70">
               {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} of {total}
