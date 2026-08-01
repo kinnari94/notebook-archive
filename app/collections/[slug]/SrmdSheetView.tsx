@@ -282,6 +282,12 @@ function priorityBandFor(score: number): string {
 function withDerivedFields(data: Record<string, string>, fields: SrmdField[]): Record<string, string> {
   let next = data
   for (const f of fields) {
+    // Clears a hidden field's own stale value first (e.g. Legacy/Short_Form once
+    // Collection_Type moves away from Textile/Paper Bound), so anything deriving
+    // from it (Parent_ID) sees it as genuinely blank rather than a leftover value.
+    if (f.showWhen && !f.showWhen.values.includes(next[f.showWhen.field] ?? '') && next[f.key]) {
+      next = { ...next, [f.key]: '' }
+    }
     if (f.deriveMonthFrom) {
       const src = toDateInputValue(next[f.deriveMonthFrom] ?? '')
       const derived = src ? src.slice(0, 7) : ''
@@ -317,6 +323,11 @@ function withDerivedFields(data: Record<string, string>, fields: SrmdField[]): R
       const [scoreKey] = f.deriveCustomFrom!
       const score = numOrNull(next[scoreKey])
       const derived = score != null ? priorityBandFor(score) : ''
+      if (next[f.key] !== derived) next = { ...next, [f.key]: derived }
+    }
+    if (f.deriveConcat) {
+      const values = f.deriveConcat.fields.map(k => next[k])
+      const derived = values.every(v => v != null && v !== '') ? values.join(f.deriveConcat.separator) : ''
       if (next[f.key] !== derived) next = { ...next, [f.key]: derived }
     }
   }
@@ -362,7 +373,7 @@ function chipHighlight(key: string, value: unknown, slug: string): string | null
 }
 
 function FormField({
-  field, value, onChange, optionSets, customValues, canAddOption, onAddOption, onDeleteOption, objectIdOptions,
+  field, value, onChange, optionSets, customValues, canAddOption, onAddOption, onDeleteOption, objectIdOptions, categoryCodeOptions,
 }: {
   field: SrmdField
   value: string
@@ -373,6 +384,7 @@ function FormField({
   onAddOption: (optionSetKey: string, value: string) => Promise<Option[]>
   onDeleteOption: (optionSetKey: string, value: string) => Promise<Option[]>
   objectIdOptions: Option[]
+  categoryCodeOptions: Option[]
 }) {
   const cls = 'w-full bg-white text-xs font-semibold py-1.5 px-2.5 rounded-lg border border-[#eae4da] focus:outline-none focus:ring-1 focus:ring-[#1C3D27]'
   switch (field.type) {
@@ -432,6 +444,19 @@ function FormField({
           className={cls}
         />
       )
+    case 'category-code': {
+      // Includes the current value even if it's not (yet) among the live-fetched
+      // codes — e.g. the very first item of a brand-new category — so it doesn't
+      // silently disappear from the selected value.
+      const hasValue = !!value && categoryCodeOptions.some(o => o.value === value)
+      return (
+        <select value={value} onChange={e => onChange(e.target.value)} className={`${cls} cursor-pointer`}>
+          <option value="">— Select Category Code —</option>
+          {!hasValue && value && <option value={value}>{value} (new)</option>}
+          {categoryCodeOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+      )
+    }
     case 'checkbox':
       return (
         <div className="inline-flex items-center gap-4 py-1.5">
@@ -501,13 +526,13 @@ function FormField({
     case 'hidden':
       return null
     default:
-      if (field.deriveMonthFrom || field.deriveCustom === 'priorityBand') {
+      if (field.deriveMonthFrom || field.deriveCustom === 'priorityBand' || field.deriveConcat) {
         return (
           <input
             type="text"
             value={value}
             readOnly
-            title={`Auto-filled from ${field.deriveMonthFrom ?? field.deriveCustomFrom?.join(', ')} — not editable`}
+            title={`Auto-filled from ${field.deriveMonthFrom ?? field.deriveCustomFrom?.join(', ') ?? field.deriveConcat?.fields.join(', ')} — not editable`}
             className={`${cls} bg-stone-100 text-stone-500 cursor-not-allowed`}
           />
         )
@@ -549,6 +574,12 @@ const SrmdSheetView = React.forwardRef<SrmdSheetViewHandle, { slug: string }>(fu
   const [uploading, setUploading] = useState(false)
   const [previewImg, setPreviewImg] = useState<string | null>(null)
   const [objectIdOptions, setObjectIdOptions] = useState<Option[]>([])
+  const [objectIdTouched, setObjectIdTouched] = useState(false)
+  const objectIdTouchedRef = useRef(objectIdTouched)
+  const [categoryCodeOptions, setCategoryCodeOptions] = useState<Option[]>([])
+  const [shortFormTouched, setShortFormTouched] = useState(false)
+  const shortFormTouchedRef = useRef(shortFormTouched)
+  const prevCollectionTypeRef = useRef<string | undefined>(undefined)
   const [groupByKey, setGroupByKey] = useState('')
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
   const PAGE_SIZE = 30
@@ -588,13 +619,104 @@ const SrmdSheetView = React.forwardRef<SrmdSheetViewHandle, { slug: string }>(fu
     fetch('/api/srmd/inventory/object-ids').then(r => r.json()).then(d => setObjectIdOptions(d.options || [])).catch(() => {})
   }, [config])
 
+  useEffect(() => { objectIdTouchedRef.current = objectIdTouched }, [objectIdTouched])
+
+  // Inventory Master only, and only for a brand-new entry the user hasn't hand-edited
+  // Object_ID themselves — suggests the next ID (see the next-object-id route for the
+  // actual rules: Legacy_Collection_Type_Short_Form_NNNN[.N] for Textile/Paper Bound,
+  // else the workbook's NNNN.N-TITLE lot/sub-item scheme keyed off Object_Name).
+  // Re-suggests live as the contributing fields change, right up until the user types
+  // into Object_ID directly, which then wins permanently for this form session.
+  useEffect(() => {
+    if (slug !== 'inventory' || !formOpen || editingId || objectIdTouched) return
+    const collectionType = formData.Collection_Type
+    const legacy = formData.Legacy
+    const shortForm = formData.Short_Form
+    const objectName = formData.Object_Name
+    if (!collectionType) return
+    if ((collectionType === 'TX' || collectionType === 'PB') && (!legacy || !shortForm)) return
+
+    const handle = setTimeout(() => {
+      const params = new URLSearchParams({ collectionType })
+      if (legacy) params.set('legacy', legacy)
+      if (shortForm) params.set('shortForm', shortForm)
+      if (objectName) params.set('objectName', objectName)
+      fetch(`/api/srmd/inventory/next-object-id?${params}`)
+        .then(r => r.json())
+        .then(d => {
+          if (d.objectId && !objectIdTouchedRef.current) setFormData(p => ({ ...p, Object_ID: d.objectId }))
+        })
+        .catch(() => {})
+    }, 500)
+    return () => clearTimeout(handle)
+  }, [slug, formOpen, editingId, objectIdTouched, formData.Collection_Type, formData.Legacy, formData.Short_Form, formData.Object_Name])
+
+  useEffect(() => { shortFormTouchedRef.current = shortFormTouched }, [shortFormTouched])
+
+  // Inventory Master, Textile/Paper Bound only — fetches every Category Code already
+  // in use for the currently selected Collection_Type, parsed live from existing
+  // Object_ID values (see the category-codes route), so the dropdown reflects real
+  // usage instead of a hand-maintained list. Re-fetches whenever Collection_Type changes.
+  useEffect(() => {
+    const collectionType = formData.Collection_Type
+    if (slug !== 'inventory' || (collectionType !== 'TX' && collectionType !== 'PB')) {
+      setCategoryCodeOptions([])
+      return
+    }
+    fetch(`/api/srmd/inventory/category-codes?collectionType=${collectionType}`)
+      .then(r => r.json())
+      .then(d => setCategoryCodeOptions(d.options || []))
+      .catch(() => {})
+  }, [slug, formData.Collection_Type])
+
+  // Inventory Master only, Textile/Paper Bound only, and only until the user hand-picks
+  // a different Category Code themselves — suggests a code from the first two letters
+  // of Object_Name (e.g. "Shawl" → "SH"). It doesn't need to be persisted anywhere: once
+  // this entry is saved, the category-codes fetch above will pick it up as "in use" for
+  // the next person entering the same category.
+  useEffect(() => {
+    if (slug !== 'inventory' || !formOpen || editingId || shortFormTouched) return
+    const collectionType = formData.Collection_Type
+    if (collectionType !== 'TX' && collectionType !== 'PB') return
+    const objectName = formData.Object_Name?.trim()
+    if (!objectName) return
+    const derived = objectName.slice(0, 2).toUpperCase()
+    if (!derived) return
+
+    const handle = setTimeout(() => {
+      if (shortFormTouchedRef.current) return
+      setFormData(p => (p.Short_Form === derived ? p : withDerivedFields({ ...p, Short_Form: derived }, config.fields)))
+    }, 600)
+    return () => clearTimeout(handle)
+  }, [slug, formOpen, editingId, shortFormTouched, formData.Collection_Type, formData.Object_Name])
+
+  // Textile and Paper Bound each fetch their own Category Code list, so a code picked
+  // under one no longer means anything under the other — switching directly between
+  // them (not just leaving both) must clear the stale value and let it re-suggest for
+  // the newly selected type.
+  useEffect(() => {
+    if (slug !== 'inventory' || !formOpen) return
+    const current = formData.Collection_Type
+    if (prevCollectionTypeRef.current !== undefined && prevCollectionTypeRef.current !== current) {
+      setShortFormTouched(false)
+      setFormData(p => (p.Short_Form ? withDerivedFields({ ...p, Short_Form: '' }, config.fields) : p))
+    }
+    prevCollectionTypeRef.current = current
+  }, [slug, formOpen, formData.Collection_Type])
+
   function openAdd() {
     setEditingId(null)
+    setObjectIdTouched(false)
+    setShortFormTouched(false)
     const today = new Date().toISOString().slice(0, 10)
     const withToday = {
       ...emptyFormData,
       ...Object.fromEntries(config.fields.filter(f => f.defaultToday).map(f => [f.key, today])),
     }
+    // Primes the Collection_Type change-tracker to this fresh form's own value, so
+    // its effect doesn't compare against whatever the previous form session left
+    // behind and wrongly clear Short_Form on the very first render.
+    prevCollectionTypeRef.current = withToday.Collection_Type ?? ''
     setFormData(withDerivedFields(withToday, config.fields))
     setFormError(null)
     setFormOpen(true)
@@ -604,7 +726,12 @@ const SrmdSheetView = React.forwardRef<SrmdSheetViewHandle, { slug: string }>(fu
 
   function openEdit(item: Doc) {
     setEditingId(item._id)
+    setObjectIdTouched(true)
+    setShortFormTouched(true)
     const fromItem = Object.fromEntries(config.fields.map(f => [f.key, item[f.key] != null ? String(item[f.key]) : '']))
+    // Same priming as openAdd — an edited record's own Collection_Type must not read
+    // as a "change" against the previous form session's leftover ref value.
+    prevCollectionTypeRef.current = fromItem.Collection_Type ?? ''
     setFormData(withDerivedFields(fromItem, config.fields))
     setFormError(null)
     setFormOpen(true)
@@ -1052,6 +1179,7 @@ const SrmdSheetView = React.forwardRef<SrmdSheetViewHandle, { slug: string }>(fu
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {config.fields.map(f => {
                     if (f.type === 'hidden') return null
+                    if (f.showWhen && !f.showWhen.values.includes(formData[f.showWhen.field] ?? '')) return null
                     if (f.type === 'image') {
                       const url = formData[f.key] ?? ''
                       return (
@@ -1136,10 +1264,13 @@ const SrmdSheetView = React.forwardRef<SrmdSheetViewHandle, { slug: string }>(fu
                             onAddOption={addOption}
                             onDeleteOption={deleteOption}
                             objectIdOptions={objectIdOptions}
+                            categoryCodeOptions={categoryCodeOptions}
                           />
                         </div>
                       )
                     }
+                    const isAutoSuggestedObjectId = slug === 'inventory' && f.key === 'Object_ID'
+                    const isAutoSuggestedShortForm = slug === 'inventory' && f.key === 'Short_Form'
                     return (
                       <div key={f.key} className={f.type === 'textarea' ? 'sm:col-span-2 flex flex-col gap-1' : 'flex flex-col gap-1'}>
                         <label className="font-bold text-stone-600 block mb-1">
@@ -1148,14 +1279,33 @@ const SrmdSheetView = React.forwardRef<SrmdSheetViewHandle, { slug: string }>(fu
                         <FormField
                           field={f}
                           value={formData[f.key] ?? ''}
-                          onChange={val => setFormData(p => withDerivedFields({ ...p, [f.key]: val }, config.fields))}
+                          onChange={val => {
+                            if (isAutoSuggestedObjectId) setObjectIdTouched(true)
+                            if (isAutoSuggestedShortForm) setShortFormTouched(true)
+                            setFormData(p => withDerivedFields({ ...p, [f.key]: val }, config.fields))
+                          }}
                           optionSets={optionSets}
                           customValues={customValues}
                           canAddOption={canEdit}
                           onAddOption={addOption}
                           onDeleteOption={deleteOption}
                           objectIdOptions={objectIdOptions}
+                          categoryCodeOptions={categoryCodeOptions}
                         />
+                        {isAutoSuggestedObjectId && !editingId && (
+                          <p className="text-[10px] text-stone-400 mt-1">
+                            {objectIdTouched
+                              ? 'Edited manually — no longer auto-suggested.'
+                              : 'Auto-suggested from Legacy/Collection Type/Category Code (Textile & Paper Bound) or Object Name — edit if needed.'}
+                          </p>
+                        )}
+                        {isAutoSuggestedShortForm && !editingId && (
+                          <p className="text-[10px] text-stone-400 mt-1">
+                            {shortFormTouched
+                              ? 'Picked manually — no longer auto-suggested.'
+                              : 'Auto-suggested from Object Name — pick a different one if needed.'}
+                          </p>
+                        )}
                       </div>
                     )
                   })}

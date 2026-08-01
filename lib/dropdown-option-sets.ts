@@ -126,6 +126,25 @@ export const SHEET_NAME_OPTIONS: Option[] = [
 
 export const DAMAGE_TERM_OPTIONS: Option[] = ALL_DAMAGE_TERMS.map(v => ({ value: v, label: v }))
 
+// Source/donor collection code — the first segment of Inventory Master's
+// GROUP-Type-Subtype-NNNN Object_ID scheme for Textile/Paper Bound items (e.g.
+// "PPG" in PPG-TX-SH-0001). Seeded from the values seen in the wider Archival
+// Dept database's own "Legacy" column; extensible like every other dropdown here.
+export const LEGACY_OPTIONS: Option[] = [
+  { value: 'PKD', label: 'PKD' },
+  { value: 'PPG', label: 'PPG' },
+  { value: 'SRMD', label: 'SRMD' },
+  { value: 'Misc', label: 'Misc' },
+  { value: 'History', label: 'History' },
+  { value: 'Atmarpit', label: 'Atmarpit' },
+]
+
+// Category Code (the third segment of the same Object_ID scheme, e.g. "SH" for
+// Shawl in PPG_TX_SH_0001) isn't a static/curated list — its options are queried
+// live per Collection_Type from the codes already in use across Inventory Master
+// (see app/api/srmd/inventory/category-codes/route.ts), since that's a more
+// reliable source of truth than a hand-maintained list.
+
 // The full registry — every optionSetKey any SrmdField (or other dropdown, e.g. the
 // Handover Checklist's Status field) can reference.
 export const STATIC_OPTION_SETS: Record<string, Option[]> = {
@@ -152,6 +171,7 @@ export const STATIC_OPTION_SETS: Record<string, Option[]> = {
   THRESHOLD_PROFILE: THRESHOLD_PROFILE_OPTIONS,
   DAMAGE_TERMS: DAMAGE_TERM_OPTIONS,
   HANDOVER_STATUS: HANDOVER_STATUS_OPTIONS,
+  LEGACY: LEGACY_OPTIONS,
 }
 
 export type { Option }

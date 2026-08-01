@@ -13,6 +13,7 @@ import {
   THRESHOLD_PROFILE_OPTIONS, ASSESSMENT_TYPE_OPTIONS, BACKGROUND_OPTIONS, SHOT_PURPOSE_OPTIONS,
   PHOTO_RIGHTS_OPTIONS, APPROVAL_STATUS_OPTIONS, ACTION_LEVEL_OPTIONS, ACTION_TYPE_OPTIONS,
   CHANGE_LOG_ACTION_TYPE_OPTIONS, SHEET_NAME_OPTIONS, RECORD_LEVEL_2_OPTIONS,
+  LEGACY_OPTIONS,
 } from '@/lib/dropdown-option-sets'
 
 export interface SrmdColumn {
@@ -29,6 +30,11 @@ export interface SrmdColumn {
 //             user picks an existing object instead of retyping its ID by hand.
 //             Inventory Master's own Object_ID field stays plain 'text', since that's
 //             where the ID is created.
+// 'category-code' → <select> of Category Codes already in use for the currently
+//             selected Collection_Type, parsed live from existing Object_ID values
+//             (see app/api/srmd/inventory/category-codes/route.ts) rather than a
+//             hand-maintained list — Textile and Paper Bound don't share a subtype
+//             vocabulary, so the list re-fetches whenever Collection_Type changes.
 // 'year' → year-only picker (a decade grid, not a full day/month/year calendar) —
 //          for fields like Inventory Master's Date_or_Period where only the year
 //          matters
@@ -36,7 +42,7 @@ export interface SrmdColumn {
 export interface SrmdField {
   key: string
   label: string
-  type: 'text' | 'textarea' | 'date' | 'year' | 'number' | 'select' | 'combo' | 'image' | 'hidden' | 'checkbox' | 'object-lookup'
+  type: 'text' | 'textarea' | 'date' | 'year' | 'number' | 'select' | 'combo' | 'image' | 'hidden' | 'checkbox' | 'object-lookup' | 'category-code'
   options?: Option[]
   // For 'select'/'combo' fields backed by a shared, user-extensible option list —
   // see lib/dropdown-option-sets.ts. Fields without this key show a fixed list only.
@@ -72,6 +78,15 @@ export interface SrmdField {
   // source field keys in the order each named formula expects them.
   deriveCustom?: 'priorityScore' | 'priorityBand'
   deriveCustomFrom?: string[]
+  // For 'text' fields computed by joining other fields with a separator — mirrors
+  // the workbook's own Parent_ID convention (Legacy_Collection_Type_Short_Form, e.g.
+  // "PPG_TX_SH"). Blank unless every contributing field has a value. Read-only in
+  // the form since it's computed, not entered.
+  deriveConcat?: { fields: string[]; separator: string }
+  // Hides this field entirely (not just disables it) unless the named field's
+  // current value is one of `values` — e.g. Legacy/Short_Form only make sense once
+  // Collection_Type is Textile or Paper Bound.
+  showWhen?: { field: string; values: string[] }
 }
 
 export interface SrmdSheetConfig {
@@ -121,6 +136,15 @@ const priorityBandFrom = (key: string, label: string, priorityScoreKey: string):
   ({ key, label, type: 'text', deriveCustom: 'priorityBand', deriveCustomFrom: [priorityScoreKey] })
 const sel = (key: string, label: string, options: Option[], optionSetKey?: string): SrmdField =>
   ({ key, label, type: 'select', options, optionSetKey })
+// A 'select' field hidden unless another field's current value matches — e.g.
+// Legacy/Short_Form only make sense once Collection_Type is Textile/Paper Bound.
+const selWhen = (
+  key: string, label: string, options: Option[], optionSetKey: string, showWhen: { field: string; values: string[] }
+): SrmdField => ({ key, label, type: 'select', options, optionSetKey, showWhen })
+// Parent_ID = Legacy_Collection_Type_Short_Form, joined only once every contributing
+// field has a value (see deriveConcat on SrmdField above).
+const concatOf = (key: string, label: string, fields: string[], separator = '-'): SrmdField =>
+  ({ key, label, type: 'text', deriveConcat: { fields, separator } })
 const yesNo = (key: string, label: string): SrmdField => ({ key, label, type: 'checkbox' })
 const objectLookup = (key: string, label: string): SrmdField => ({ key, label, type: 'object-lookup' })
 const image = (key: string, label: string): SrmdField => ({ key, label, type: 'image' })
@@ -146,10 +170,22 @@ export const SRMD_SHEETS: SrmdSheetConfig[] = [
       { key: 'Access_Level', label: 'Access' },
     ],
     fields: [
-      t('Object_ID', 'Object ID'), t('Parent_ID', 'Parent ID'),
+      sel('Collection_Type', 'Collection Type', COLLECTION_TYPE_OPTIONS, 'COLLECTION_TYPE'),
+      // Only meaningful for Textile/Paper Bound — hidden for any other Collection
+      // Type. Together with Collection_Type they build Parent_ID and (via the
+      // inventory-only auto-suggest effect in SrmdSheetView) Object_ID.
+      selWhen('Legacy', 'Legacy', LEGACY_OPTIONS, 'LEGACY', { field: 'Collection_Type', values: ['TX', 'PB'] }),
+      // Options fetched live from existing Inventory Master Object_IDs for whichever
+      // Collection_Type is currently selected — see the 'category-code' type note above.
+      { key: 'Short_Form', label: 'Category Code', type: 'category-code', showWhen: { field: 'Collection_Type', values: ['TX', 'PB'] } },
+      // Auto-suggested (see SrmdSheetView's inventory-only effect): for Textile/Paper
+      // Bound, Legacy_Collection_Type_Short_Form_NNNN[.N]; otherwise the workbook's
+      // NNNN.N-TITLE lot/sub-item scheme keyed off Object_Name. Still a plain editable
+      // field so it can be corrected or overridden by hand.
+      t('Object_ID', 'Object ID'),
+      concatOf('Parent_ID', 'Parent ID', ['Legacy', 'Collection_Type', 'Short_Form'], '_'),
       sel('Record_Level_1', 'Archival Level', RECORD_LEVEL_OPTIONS, 'RECORD_LEVEL'),
       sel('Record_Level_2', 'Document Type', RECORD_LEVEL_2_OPTIONS, 'RECORD_LEVEL_2'),
-      sel('Collection_Type', 'Collection Type', COLLECTION_TYPE_OPTIONS, 'COLLECTION_TYPE'),
       t('Object_Name', 'Object Name'), t('Alternate_Title', 'Alternate Title'),
       ta('Brief_Description', 'Brief Description'),
       t('Material_Primary', 'Material (Primary)'), t('Material_Secondary', 'Material (Secondary)'),
