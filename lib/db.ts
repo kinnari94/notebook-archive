@@ -1,4 +1,4 @@
-import clientPromise from './mongodb'
+import { getClientPromise } from './mongodb'
 import { Db, ObjectId } from 'mongodb'
 
 const DB_NAME = process.env.MONGODB_DB || 'bapaji_archive'
@@ -6,7 +6,7 @@ const DB_NAME = process.env.MONGODB_DB || 'bapaji_archive'
 let indexesEnsured = false
 
 export async function getDb(): Promise<Db> {
-  const client = await clientPromise
+  const client = await getClientPromise()
   const db = client.db(DB_NAME)
   if (!indexesEnsured) {
     indexesEnsured = true
@@ -283,14 +283,14 @@ export async function queryIncidents(q: IncidentQuery) {
     if (source === 'standard') {
       const total = await db.collection(COLLECTIONS.incidents).countDocuments(incFilter)
       const docs  = await db.collection(COLLECTIONS.incidents)
-        .find(incFilter).sort({ 'date.year': incSortDir }).skip(skip).limit(limit).toArray()
+        .find(incFilter).sort({ 'date.year': incSortDir, _id: incSortDir }).skip(skip).limit(limit).toArray()
       return { total, incidents: docs.map(d => ({ ...d, _id: d._id.toString() })) }
     }
 
     if (source === 'bapa_katha') {
       const total = await db.collection(COLLECTIONS.bk_stories).countDocuments(bkFilter)
       const docs  = await db.collection(COLLECTIONS.bk_stories)
-        .find(bkFilter).sort({ extracted_at: bkSortDir }).skip(skip).limit(limit).toArray()
+        .find(bkFilter).sort({ extracted_at: bkSortDir, _id: bkSortDir }).skip(skip).limit(limit).toArray()
       return { total, incidents: docs.map(d => normalizeBKStory(d as Record<string, unknown>)) }
     }
 
@@ -304,7 +304,7 @@ export async function queryIncidents(q: IncidentQuery) {
 
     if (skip < incTotal) {
       const incDocs = await db.collection(COLLECTIONS.incidents)
-        .find(incFilter).sort({ 'date.year': incSortDir }).skip(skip).limit(limit).toArray()
+        .find(incFilter).sort({ 'date.year': incSortDir, _id: incSortDir }).skip(skip).limit(limit).toArray()
       incidents.push(...incDocs.map(d => ({ ...d, _id: d._id.toString() })))
     }
 
@@ -312,7 +312,7 @@ export async function queryIncidents(q: IncidentQuery) {
     const bkLimit = limit - incidents.length
     if (bkLimit > 0) {
       const bkDocs = await db.collection(COLLECTIONS.bk_stories)
-        .find(bkFilter).sort({ extracted_at: bkSortDir }).skip(bkSkip).limit(bkLimit).toArray()
+        .find(bkFilter).sort({ extracted_at: bkSortDir, _id: bkSortDir }).skip(bkSkip).limit(bkLimit).toArray()
       incidents.push(...bkDocs.map(d => normalizeBKStory(d as Record<string, unknown>)))
     }
 

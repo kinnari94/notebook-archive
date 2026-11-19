@@ -2,7 +2,9 @@ import { NextRequest } from 'next/server'
 import { spawn } from 'child_process'
 import { join } from 'path'
 import { createHash } from 'crypto'
+import { ObjectId } from 'mongodb'
 import { getDb, COLLECTIONS } from '@/lib/db'
+import { makeEntry, findDuplicate, normalizeText, type DedupeEntry } from '@/lib/incident-dedupe'
 
 function contentHash(notebookId: string, category: string, key: string): string {
   return createHash('sha1')
@@ -366,6 +368,15 @@ export async function POST(req: NextRequest) {
           const nbTitle: string = (notebook_titles as Record<string, string>)[nbId] || nbId.slice(0, 8)
           send({ msg: `━━ Notebook: ${nbTitle}`, level: 'info' })
 
+          // Every category query searches the whole notebook, so the same incident
+          // comes back under several categories with slightly different wording.
+          // Keep an in-memory pool of this notebook's incidents to fuzzy-match against.
+          const existing = await db.collection(COLLECTIONS.incidents)
+            .find({ source_notebook: nbId }, { projection: { description: 1, 'date.year': 1, source_chunk: 1, category: 1 } })
+            .toArray()
+          const pool: DedupeEntry[] = existing.map(d =>
+            makeEntry(d._id.toString(), d.description, d.date?.year, d.source_chunk, d.category))
+
           for (const cat of categories as string[]) {
             if (done > 0) await new Promise(r => setTimeout(r, 15000))
             send({ msg: `  Querying [${cat}]…`, level: 'info' })
@@ -401,14 +412,32 @@ export async function POST(req: NextRequest) {
               } else {
                 let saved = 0, skipped = 0
                 for (const inc of incidents) {
-                  const hash = contentHash(nbId, cat, inc.description)
+                  const entry = makeEntry('', inc.description, inc.date.year, inc.source_chunk, inc.category)
+                  const dupId = findDuplicate(entry, pool)
+                  if (dupId) {
+                    // Already have it (possibly under another category) — just note
+                    // that this category's query also surfaced it.
+                    if (ObjectId.isValid(dupId)) {
+                      await db.collection(COLLECTIONS.incidents).updateOne(
+                        { _id: new ObjectId(dupId) },
+                        { $addToSet: { also_matched_categories: cat } }
+                      )
+                    }
+                    skipped++
+                    continue
+                  }
+                  // Hash is category-independent so the same text can't be stored twice.
+                  const hash = contentHash(nbId, '', normalizeText(inc.description))
                   const result = await db.collection(COLLECTIONS.incidents).updateOne(
                     { contentHash: hash },
                     { $setOnInsert: { ...inc, contentHash: hash, extracted_at: now, source_notebook: nbId, source_notebook_title: nbTitle, source_type: 'notebooklm', nlm_source_links: nlmSourceLinks } },
                     { upsert: true }
                   )
-                  if (result.upsertedCount > 0) saved++
-                  else skipped++
+                  if (result.upsertedCount > 0) {
+                    saved++
+                    entry.id = result.upsertedId!.toString()
+                    pool.push(entry)
+                  } else skipped++
                 }
                 const msg = skipped > 0
                   ? `  ✓ ${saved} new point(s) saved · ${skipped} already existed`

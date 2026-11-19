@@ -112,7 +112,11 @@ export default function BrowseClient() {
         yearFrom, yearTo, q: searchKeyword, tags: selectedTags, sort: sortSequence,
       }
       const page = await fetch(`/api/incidents?${buildParams(source, allIncidents.length, PAGE, filters)}`).then(r => r.json())
-      setAllIncidents(prev => [...prev, ...(page.incidents || [])])
+      // Skip anything already shown (e.g. if data changed between page loads).
+      setAllIncidents(prev => {
+        const seen = new Set(prev.map(i => i._id))
+        return [...prev, ...((page.incidents || []) as typeof prev).filter(i => !seen.has(i._id))]
+      })
     } finally {
       setLoadingMore(false)
     }
