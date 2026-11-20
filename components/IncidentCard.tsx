@@ -98,8 +98,32 @@ interface Incident {
   tags?: string[]
   source_chunk?: string
   verified?: boolean
+  source_notebook?: string
   source_notebook_title?: string
-  nlm_source_links?: { source_id: string; cited_text: string; nlm_url: string }[]
+  nlm_source_links?: { source_id: string; cited_text: string; nlm_url: string; source_title?: string }[]
+}
+
+/**
+ * NotebookLM URL for the source this incident came from.
+ * Newer extractions store only the incident's own citations. Older ones stored
+ * every citation from the whole answer, so pick the passage that best matches
+ * the incident's quote. With no links at all, fall back to the notebook.
+ */
+function sourceLink(incident: Incident): { url: string; title?: string } | null {
+  const links = incident.nlm_source_links || []
+  if (links.length === 1) return { url: links[0].nlm_url, title: links[0].source_title }
+  if (links.length > 1) {
+    const words = (s: string) => new Set(s.toLowerCase().replace(/\[\d+[^\]]*\]/g, ' ').split(/[\s.,;:!?"“”'()–-]+/).filter(w => w.length > 1))
+    const quote = words(incident.source_chunk || incident.description)
+    let best = links[0], bestScore = 0
+    for (const l of links) {
+      let score = 0
+      for (const w of words(l.cited_text || '')) if (quote.has(w)) score++
+      if (score > bestScore) { best = l; bestScore = score }
+    }
+    return { url: best.nlm_url, title: best.source_title }
+  }
+  return incident.source_notebook ? { url: `https://notebooklm.google.com/notebook/${incident.source_notebook}` } : null
 }
 
 interface Props {
@@ -128,6 +152,28 @@ const meta = CATEGORY_COLORS[normCat] ?? CATEGORY_COLORS[incident.category || ''
   }
 
   const refId = 'REF-' + incident._id.slice(-6).toUpperCase()
+
+  const srcLink = sourceLink(incident)
+  const srcUrl = srcLink?.url
+  // Full names, wrapping instead of truncating: notebook + the transcript file it opens.
+  const transcript = srcLink?.title?.replace(/(\.mp4)?\.txt$/i, '')
+  const sourceName = (maxW: string) => {
+    if (!incident.source_notebook_title) return null
+    const cls = `min-w-0 ${maxW} text-[10px] font-mono text-[#A1958C] text-right break-words leading-snug`
+    const body = (
+      <>
+        <span className="block">📓 {incident.source_notebook_title}</span>
+        {transcript && <span className="block font-normal opacity-80">{transcript}</span>}
+      </>
+    )
+    return srcUrl
+      ? <a href={srcUrl} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+          title={transcript ? `Open source transcript: ${srcLink?.title}` : `Open notebook in NotebookLM — ${incident.source_notebook_title}`}
+          className={`${cls} hover:text-[#794E2C] hover:underline transition-colors`}>
+          {body}
+        </a>
+      : <span className={cls}>{body}</span>
+  }
 
   // ── LIST layout ──────────────────────────────────────────────────────────
   if (layout === 'list') {
@@ -179,16 +225,12 @@ const meta = CATEGORY_COLORS[normCat] ?? CATEGORY_COLORS[incident.category || ''
         </div>
 
         <div className="flex items-center gap-3 text-[11px] font-sans font-medium shrink-0 select-none">
-          {incident.source_notebook_title && (
-            <span className="text-[10px] font-mono text-[#A1958C] truncate max-w-[100px]" title={incident.source_notebook_title}>
-              📓 {incident.source_notebook_title}
-            </span>
-          )}
+          {sourceName('max-w-[220px]')}
           <button onClick={handleCopy} className="text-[#645A51] hover:text-[#2C2117] transition-colors cursor-pointer">
             {isCopied ? '[copied ✓]' : '[copy]'}
           </button>
-          {incident.nlm_source_links?.[0] && (
-            <a href={incident.nlm_source_links[0].nlm_url} target="_blank" rel="noopener noreferrer"
+          {incident.nlm_source_links?.[0] && srcUrl && (
+            <a href={srcUrl} target="_blank" rel="noopener noreferrer"
               className="text-[#794E2C] hover:text-[#533013] hover:underline transition-colors">
               source ↗
             </a>
@@ -275,21 +317,17 @@ const meta = CATEGORY_COLORS[normCat] ?? CATEGORY_COLORS[incident.category || ''
         ) : null}
 
         {/* Actions */}
-        <div className="flex items-center justify-between gap-2 pt-2.5 border-t border-[#F2ECE6] text-[11px] font-sans font-bold">
+        <div className="flex items-end justify-between gap-3 pt-2.5 border-t border-[#F2ECE6] text-[11px] font-sans font-bold">
           <button onClick={handleCopy} className="text-[#645A51] hover:text-[#2C2117] transition-colors flex items-center gap-1 cursor-pointer select-none">
             {isCopied
               ? <><Check className="w-3 h-3 stroke-[2.5]" /> copied ✓</>
               : <><Copy className="w-3 h-3" /> copy bio</>
             }
           </button>
-          <div className="flex items-center gap-3 ml-auto">
-            {incident.source_notebook_title && (
-              <span className="text-[10px] font-mono text-[#A1958C] truncate max-w-[120px]" title={incident.source_notebook_title}>
-                📓 {incident.source_notebook_title}
-              </span>
-            )}
-            {incident.nlm_source_links?.[0]
-              ? <a href={incident.nlm_source_links[0].nlm_url} target="_blank" rel="noopener noreferrer"
+          <div className="flex items-end gap-3 ml-auto min-w-0">
+            {sourceName('max-w-full')}
+            {incident.nlm_source_links?.[0] && srcUrl
+              ? <a href={srcUrl} target="_blank" rel="noopener noreferrer"
                   className="text-[#794E2C] hover:text-[#533013] transition-colors hover:underline">
                   source ↗
                 </a>

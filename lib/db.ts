@@ -197,10 +197,22 @@ export interface IncidentQuery {
   limit?: number
   skip?: number
   source?: 'standard' | 'bapa_katha' | 'all'
+  /** Source filter: "nb:<notebook id>" for a whole notebook, "src:<source id>" for one transcript. */
+  src?: string
+}
+
+function parseSrc(src?: string): { notebook?: string; sourceId?: string } {
+  if (!src) return {}
+  if (src.startsWith('nb:'))  return { notebook: src.slice(3) }
+  if (src.startsWith('src:')) return { sourceId: src.slice(4) }
+  return {}
 }
 
 function buildIncFilter(q: Omit<IncidentQuery, 'limit' | 'skip'>): Record<string, unknown> {
   const incFilter: Record<string, unknown> = {}
+  const src = parseSrc(q.src)
+  if (src.notebook) incFilter.source_notebook = src.notebook
+  if (src.sourceId) incFilter['nlm_source_links.source_id'] = src.sourceId
   if (q.category && !q.category.startsWith('bk_')) incFilter.category = q.category
   if (q.person)   incFilter.people    = { $regex: q.person,   $options: 'i' }
   if (q.location) incFilter.locations = { $regex: q.location, $options: 'i' }
@@ -221,6 +233,9 @@ function buildBkFilter(q: Omit<IncidentQuery, 'limit' | 'skip'>): Record<string,
   // $and rather than reusing the $or key directly, since person + search_text both
   // need their own $or clause and a shared key would silently overwrite the first one.
   const and: Record<string, unknown>[] = []
+  const src = parseSrc(q.src)
+  if (src.notebook) and.push({ source_notebook: src.notebook })
+  if (src.sourceId) and.push({ source_id: src.sourceId })
   if (q.category?.startsWith('bk_')) {
     and.push({ $or: [{ category: q.category }, { categories: q.category }] })
   }
@@ -385,6 +400,25 @@ export async function getAllPeople(limit = 200) {
   ])
   const flat = flattenDistinct([...incPeople, ...bkPerson, ...bkOtherPeople])
   return [...new Set(flat)].sort().slice(0, limit)
+}
+
+export interface SourceOption {
+  notebook_id: string
+  notebook_title: string
+  count: number
+}
+
+/** Notebooks that incidents (or BK stories) came from, with counts — for the Source filter. */
+export async function getSourceOptions(source: 'standard' | 'bapa_katha' = 'standard'): Promise<SourceOption[]> {
+  const db = await getDb()
+  const col = db.collection(source === 'bapa_katha' ? COLLECTIONS.bk_stories : COLLECTIONS.incidents)
+  const rows = await col.aggregate([
+    { $match: { source_notebook: { $exists: true, $ne: null } } },
+    { $group: { _id: '$source_notebook', title: { $first: '$source_notebook_title' }, count: { $sum: 1 } } },
+  ]).toArray()
+  return rows
+    .map(r => ({ notebook_id: String(r._id), notebook_title: (r.title as string) || String(r._id), count: r.count as number }))
+    .sort((a, b) => a.notebook_title.localeCompare(b.notebook_title, undefined, { numeric: true }))
 }
 
 export async function getAllLocations(limit = 200) {

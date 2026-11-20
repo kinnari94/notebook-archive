@@ -12,6 +12,7 @@ export async function GET(req: NextRequest) {
       year_to:     s.get('year_to')   ? Number(s.get('year_to'))   : undefined,
       search_text: s.get('q')         || undefined,
       tags:        tags ? tags.split(',').filter(Boolean) : undefined,
+      src:         s.get('src')       || undefined,
       source:      (s.get('source') as 'standard' | 'bapa_katha' | 'all') || 'all',
     })
     return NextResponse.json(result)

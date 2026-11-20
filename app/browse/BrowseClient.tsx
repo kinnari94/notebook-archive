@@ -48,6 +48,8 @@ export default function BrowseClient() {
   const [selectedCategory,setSelectedCategory]= useState('')
   const [searchPerson,    setSearchPerson]    = useState('')
   const [searchLocation,  setSearchLocation]  = useState('')
+  const [srcFilter,       setSrcFilter]       = useState('')
+  const [sourceOptions,   setSourceOptions]   = useState<{ notebook_id: string; notebook_title: string; count: number }[]>([])
   const [yearFrom,        setYearFrom]        = useState('')
   const [yearTo,          setYearTo]          = useState('')
   const [sortSequence,    setSortSequence]    = useState<'asc' | 'desc'>('asc')
@@ -57,7 +59,7 @@ export default function BrowseClient() {
 
   type Filters = {
     category?: string, person?: string, location?: string,
-    yearFrom?: string, yearTo?: string, q?: string, tags?: string[], sort?: 'asc' | 'desc'
+    yearFrom?: string, yearTo?: string, q?: string, tags?: string[], sort?: 'asc' | 'desc', src?: string
   }
 
   const buildParams = (src: Source, skip: number, limit: number, filters: Filters) => {
@@ -70,6 +72,7 @@ export default function BrowseClient() {
     if (filters.q)        params.set('q', filters.q)
     if (filters.tags?.length) params.set('tags', filters.tags.join(','))
     if (filters.sort)     params.set('sort', filters.sort)
+    if (filters.src)      params.set('src', filters.src)
     return params
   }
 
@@ -109,7 +112,7 @@ export default function BrowseClient() {
     try {
       const filters: Filters = {
         category: selectedCategory, person: searchPerson, location: searchLocation,
-        yearFrom, yearTo, q: searchKeyword, tags: selectedTags, sort: sortSequence,
+        yearFrom, yearTo, q: searchKeyword, tags: selectedTags, sort: sortSequence, src: srcFilter,
       }
       const page = await fetch(`/api/incidents?${buildParams(source, allIncidents.length, PAGE, filters)}`).then(r => r.json())
       // Skip anything already shown (e.g. if data changed between page loads).
@@ -120,30 +123,31 @@ export default function BrowseClient() {
     } finally {
       setLoadingMore(false)
     }
-  }, [source, allIncidents.length, selectedCategory, searchPerson, searchLocation, yearFrom, yearTo, searchKeyword, selectedTags, sortSequence])
+  }, [source, allIncidents.length, selectedCategory, searchPerson, searchLocation, yearFrom, yearTo, searchKeyword, selectedTags, sortSequence, srcFilter])
 
   useEffect(() => {
     const t = setTimeout(() => {
       fetchFirstPage(source, {
         category: selectedCategory, person: searchPerson, location: searchLocation,
-        yearFrom, yearTo, q: searchKeyword, tags: selectedTags, sort: sortSequence,
+        yearFrom, yearTo, q: searchKeyword, tags: selectedTags, sort: sortSequence, src: srcFilter,
       })
     }, searchKeyword ? 400 : 0)
     return () => clearTimeout(t)
-  }, [source, selectedCategory, searchPerson, searchLocation, yearFrom, yearTo, searchKeyword, selectedTags, sortSequence, fetchFirstPage])
+  }, [source, selectedCategory, searchPerson, searchLocation, yearFrom, yearTo, searchKeyword, selectedTags, sortSequence, srcFilter, fetchFirstPage])
 
   useEffect(() => {
     const t = setTimeout(() => {
       fetchCategoryCounts(source, {
-        person: searchPerson, location: searchLocation, yearFrom, yearTo, q: searchKeyword, tags: selectedTags,
+        person: searchPerson, location: searchLocation, yearFrom, yearTo, q: searchKeyword, tags: selectedTags, src: srcFilter,
       })
     }, searchKeyword ? 400 : 0)
     return () => clearTimeout(t)
-  }, [source, searchPerson, searchLocation, yearFrom, yearTo, searchKeyword, selectedTags, fetchCategoryCounts])
+  }, [source, searchPerson, searchLocation, yearFrom, yearTo, searchKeyword, selectedTags, srcFilter, fetchCategoryCounts])
 
   useEffect(() => {
     fetch('/api/people').then(r => r.json()).then(d => setPeople(d.people || [])).catch(() => {})
     fetch('/api/locations').then(r => r.json()).then(d => setLocations(d.locations || [])).catch(() => {})
+    fetch(`/api/sources?source=${source}`).then(r => r.json()).then(d => setSourceOptions(d.notebooks || [])).catch(() => setSourceOptions([]))
   }, [source])
 
   const CANONICAL_TAGS = [
@@ -156,7 +160,7 @@ export default function BrowseClient() {
 
   const clearFilters = () => {
     setSearchKeyword(''); setSelectedCategory(''); setSearchPerson('')
-    setSearchLocation(''); setYearFrom(''); setYearTo(''); setSelectedTags([])
+    setSearchLocation(''); setYearFrom(''); setYearTo(''); setSelectedTags([]); setSrcFilter('')
   }
 
   const handleSourceChange = (s: Source) => { setSource(s); clearFilters() }
@@ -174,7 +178,11 @@ export default function BrowseClient() {
   // Filtering, sorting, and pagination all happen server-side now — render what was loaded.
   const visibleIncidents = allIncidents
 
-  const hasActiveFilters = selectedCategory || searchKeyword || searchPerson || searchLocation || yearFrom || yearTo || selectedTags.length > 0
+  const hasActiveFilters = selectedCategory || searchKeyword || searchPerson || searchLocation || yearFrom || yearTo || selectedTags.length > 0 || srcFilter
+
+  const srcFilterLabel = useMemo(
+    () => sourceOptions.find(nb => srcFilter === `nb:${nb.notebook_id}`)?.notebook_title || (srcFilter ? 'Selected source' : ''),
+    [srcFilter, sourceOptions])
 
   return (
     <div className="min-h-screen bg-[#faf8f5] text-[#1c1917] pb-24 px-4 sm:px-6 lg:px-8 pt-8">
@@ -256,7 +264,7 @@ export default function BrowseClient() {
             )}
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4">
             {/* Keyword */}
             <div className="flex flex-col gap-1 sm:col-span-2">
               <label className="text-[11px] font-bold text-stone-500 tracking-wide uppercase">Keyword Search</label>
@@ -292,6 +300,21 @@ export default function BrowseClient() {
                   className="w-full bg-[#fcfbfa] text-[#1c1917] rounded-lg px-3 py-2 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#1C3D27] appearance-none pr-8 border border-[#E9E4DF]">
                   <option value="">All Locations</option>
                   {locations.map(l => <option key={l} value={l}>{l}</option>)}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-2.5 top-2.5 w-3.5 h-3.5 text-stone-400" />
+              </div>
+            </div>
+
+            {/* Source (notebook) */}
+            <div className="flex flex-col gap-1">
+              <label className="text-[11px] font-bold text-stone-500 tracking-wide uppercase">Source Name</label>
+              <div className="relative">
+                <select value={srcFilter} onChange={e => setSrcFilter(e.target.value)} title={srcFilterLabel || 'All sources'}
+                  className="w-full bg-[#fcfbfa] text-[#1c1917] rounded-lg px-3 py-2 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#1C3D27] appearance-none pr-8 border border-[#E9E4DF] truncate">
+                  <option value="">All Sources</option>
+                  {sourceOptions.map(nb => (
+                    <option key={nb.notebook_id} value={`nb:${nb.notebook_id}`}>{nb.notebook_title} ({nb.count})</option>
+                  ))}
                 </select>
                 <ChevronDown className="pointer-events-none absolute right-2.5 top-2.5 w-3.5 h-3.5 text-stone-400" />
               </div>
@@ -367,6 +390,11 @@ export default function BrowseClient() {
               {searchLocation && (
                 <span className="inline-flex items-center gap-1 bg-teal-50 text-teal-800 px-2.5 py-0.5 rounded-full text-[11px] font-medium border border-teal-100">
                   <MapPin className="w-3 h-3" />{searchLocation} <button onClick={() => setSearchLocation('')}><X className="w-3 h-3" /></button>
+                </span>
+              )}
+              {srcFilter && (
+                <span className="inline-flex items-center gap-1 bg-orange-50 text-orange-900 px-2.5 py-0.5 rounded-full text-[11px] font-medium border border-orange-100">
+                  📓 {srcFilterLabel} <button onClick={() => setSrcFilter('')}><X className="w-3 h-3" /></button>
                 </span>
               )}
               {(yearFrom || yearTo) && (

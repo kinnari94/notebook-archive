@@ -5,6 +5,7 @@ import { createHash } from 'crypto'
 import { ObjectId } from 'mongodb'
 import { getDb, COLLECTIONS } from '@/lib/db'
 import { makeEntry, findDuplicate, normalizeText, type DedupeEntry } from '@/lib/incident-dedupe'
+import { prepareSources, findIncidentSources, type FullSource, type PreparedSource } from '@/lib/source-match'
 
 function contentHash(notebookId: string, category: string, key: string): string {
   return createHash('sha1')
@@ -15,6 +16,7 @@ function contentHash(notebookId: string, category: string, key: string): string 
 const ASK_SCRIPT        = join(process.cwd(), 'scripts', 'nlm_ask.py')
 const ASK_SOURCE_SCRIPT = join(process.cwd(), 'scripts', 'nlm_ask_source.py')
 const SOURCES_SCRIPT    = join(process.cwd(), 'scripts', 'nlm_sources.py')
+const FULLTEXT_SCRIPT   = join(process.cwd(), 'scripts', 'nlm_fulltext.py')
 const PYTHON = process.platform === 'win32' ? 'python' : 'python3'
 const PYTHON_UNAVAILABLE = 'NotebookLM features require Python 3 and Playwright. Not available on serverless platforms like Vercel.'
 
@@ -105,10 +107,45 @@ function parseYear(raw: string): number | undefined {
   return undefined
 }
 
-function parseResponse(text: string, category: string): ParsedIncident[] {
+// NotebookLM puts citation markers like [3], [2, 5] or [4-6] in the answer text.
+const CITATION_MARKER = /\[(\d+(?:\s*[,–-]\s*\d+)*)\]/g
+
+function citationNumbers(text: string): number[] {
+  const out = new Set<number>()
+  for (const m of text.matchAll(CITATION_MARKER)) {
+    for (const part of m[1].split(/\s*,\s*/)) {
+      const range = part.split(/\s*[–-]\s*/).map(Number)
+      if (range.length === 2 && range[1] >= range[0] && range[1] - range[0] < 50) {
+        for (let n = range[0]; n <= range[1]; n++) out.add(n)
+      } else if (!isNaN(range[0])) out.add(range[0])
+    }
+  }
+  return [...out]
+}
+
+interface NlmLink { source_id: string; cited_text: string; nlm_url: string; citation_number?: number | null; source_title?: string }
+
+/** Links for one incident: those its [N] markers cite, else the passage that best matches its quote. */
+function linksForIncident(all: NlmLink[], citations: number[], quote: string): NlmLink[] {
+  if (citations.length) {
+    const cited = all.filter(l => l.citation_number != null && citations.includes(l.citation_number))
+    if (cited.length) return cited
+  }
+  const q = quote.toLowerCase()
+  if (q.length >= 15) {
+    const hit = all.find(l => l.cited_text && l.cited_text.length >= 15 &&
+      (l.cited_text.toLowerCase().includes(q.slice(0, 40)) || q.includes(l.cited_text.toLowerCase().slice(0, 40))))
+    if (hit) return [hit]
+  }
+  return []
+}
+
+function parseResponse(text: string, category: string): (ParsedIncident & { citations: number[] })[] {
   if (!text || text.includes('NO_INCIDENTS_FOUND')) return []
   const blocks = text.split(/INCIDENT\s*\[\d+\]/i).slice(1)
   return blocks.flatMap(block => {
+    const citations = citationNumbers(block)
+    block = block.replace(new RegExp(`[ \\t]*${CITATION_MARKER.source}`, 'g'), '')
     const desc = fieldValue(block, 'DESCRIPTION')
     if (!desc) return []
     const dateRaw = fieldValue(block, 'DATE')
@@ -125,6 +162,7 @@ function parseResponse(text: string, category: string): ParsedIncident[] {
       source_chunk: fieldValue(block, 'SOURCE_CHUNK'),
       verified: false,
       confidence: 'auto_extracted',
+      citations,
     }]
   })
 }
@@ -289,6 +327,27 @@ function askNotebook(notebookId: string, prompt: string): Promise<AskResponse> {
   })
 }
 
+/** Full text of every source in a notebook, used to find which transcript an incident came from. */
+function fetchFullTexts(notebookId: string): Promise<FullSource[]> {
+  return new Promise((resolve, reject) => {
+    const proc = spawn(PYTHON, [FULLTEXT_SCRIPT, notebookId], { stdio: ['ignore', 'pipe', 'pipe'], env: process.env })
+    const chunks: Buffer[] = []
+    proc.stdout.on('data', (d: Buffer) => chunks.push(d))
+    proc.on('close', () => {
+      try {
+        const r = JSON.parse(Buffer.concat(chunks).toString('utf8').trim())
+        if (r.error) reject(new Error(r.error))
+        else resolve((r as FullSource[]).filter(s => s.content))
+      } catch {
+        reject(new Error('Invalid response from nlm_fulltext.py'))
+      }
+    })
+    proc.on('error', (err: NodeJS.ErrnoException) => {
+      reject(new Error(err.code === 'ENOENT' ? PYTHON_UNAVAILABLE : err.message))
+    })
+  })
+}
+
 function listSources(notebookId: string): Promise<{ id: string; title: string }[]> {
   return new Promise((resolve, reject) => {
     const proc = spawn(PYTHON, [SOURCES_SCRIPT, notebookId], {
@@ -374,6 +433,35 @@ export async function POST(req: NextRequest) {
           const existing = await db.collection(COLLECTIONS.incidents)
             .find({ source_notebook: nbId }, { projection: { description: 1, 'date.year': 1, source_chunk: 1, category: 1 } })
             .toArray()
+          // Transcripts for linking incidents to their exact source — downloaded once per
+          // notebook, the first time an incident is saved.
+          let fullTexts: PreparedSource[] | null = null
+          let fullTextsFailed = false
+          const getFullTexts = async (): Promise<PreparedSource[]> => {
+            if (fullTexts || fullTextsFailed) return fullTexts || []
+            try {
+              fullTexts = prepareSources(await fetchFullTexts(nbId))
+            } catch (e) {
+              fullTextsFailed = true
+              send({ msg: `  ⚠ Couldn't download source texts for linking: ${String(e).slice(0, 120)}`, level: 'muted' })
+            }
+            return fullTexts || []
+          }
+
+          // NotebookLM only puts [N] markers on some incidents in a long answer, so fall
+          // back to finding the incident's quote in the transcripts themselves.
+          const withTranscriptLinks = async (links: NlmLink[], inc: { source_chunk: string; description: string }): Promise<NlmLink[]> => {
+            const texts = await getFullTexts()
+            if (links.length) return links.map(l => ({ ...l, source_title: texts.find(s => s.id === l.source_id)?.title }))
+            const found = findIncidentSources(inc.source_chunk, inc.description, texts)
+            return found.map(s => ({
+              source_id: s.id,
+              source_title: s.title,
+              cited_text: inc.source_chunk,
+              nlm_url: `https://notebooklm.google.com/notebook/${nbId}?source=${s.id}`,
+            }))
+          }
+
           const pool: DedupeEntry[] = existing.map(d =>
             makeEntry(d._id.toString(), d.description, d.date?.year, d.source_chunk, d.category))
 
@@ -398,11 +486,12 @@ export async function POST(req: NextRequest) {
               }
               const { answer, references } = askResult
               const now = new Date()
-              const nlmSourceLinks = references
+              const nlmSourceLinks: NlmLink[] = references
                 .filter(r => r.source_id)
                 .map(r => ({
                   source_id: r.source_id,
                   cited_text: r.cited_text,
+                  citation_number: r.citation_number,
                   nlm_url: `https://notebooklm.google.com/notebook/${nbId}?source=${r.source_id}`,
                 }))
 
@@ -411,7 +500,9 @@ export async function POST(req: NextRequest) {
                 send({ msg: `  → No points found`, level: 'muted' })
               } else {
                 let saved = 0, skipped = 0
-                for (const inc of incidents) {
+                for (const { citations, ...inc } of incidents) {
+                  // Only this incident's own citations, not every source the whole answer cited.
+                  let incLinks = linksForIncident(nlmSourceLinks, citations, inc.source_chunk)
                   const entry = makeEntry('', inc.description, inc.date.year, inc.source_chunk, inc.category)
                   const dupId = findDuplicate(entry, pool)
                   if (dupId) {
@@ -430,7 +521,7 @@ export async function POST(req: NextRequest) {
                   const hash = contentHash(nbId, '', normalizeText(inc.description))
                   const result = await db.collection(COLLECTIONS.incidents).updateOne(
                     { contentHash: hash },
-                    { $setOnInsert: { ...inc, contentHash: hash, extracted_at: now, source_notebook: nbId, source_notebook_title: nbTitle, source_type: 'notebooklm', nlm_source_links: nlmSourceLinks } },
+                    { $setOnInsert: { ...inc, contentHash: hash, extracted_at: now, source_notebook: nbId, source_notebook_title: nbTitle, source_type: 'notebooklm', nlm_source_links: await withTranscriptLinks(incLinks, inc) } },
                     { upsert: true }
                   )
                   if (result.upsertedCount > 0) {

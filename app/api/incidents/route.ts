@@ -13,6 +13,7 @@ export async function GET(req: NextRequest) {
       year_to:     s.get('year_to')   ? Number(s.get('year_to'))   : undefined,
       search_text: s.get('q')         || undefined,
       tags:        tags ? tags.split(',').filter(Boolean) : undefined,
+      src:         s.get('src')       || undefined,
       sort:        (s.get('sort') as 'asc' | 'desc') || undefined,
       limit:       s.get('limit')     ? Number(s.get('limit'))     : 20,
       skip:        s.get('skip')      ? Number(s.get('skip'))      : 0,

@@ -30,7 +30,20 @@ async def main():
         async with await NotebookLMClient.from_storage(chat_timeout=CHAT_TIMEOUT) as client:
             result = await client.chat.ask(notebook_id, prompt)
 
-        print(json.dumps({"answer": result.answer, "references": []}))
+        # Keep citations so each extracted incident can link to the exact source
+        # it came from (matched via the [N] markers in the answer text).
+        references = []
+        for ref in getattr(result, "references", None) or []:
+            source_id = getattr(ref, "source_id", None)
+            if not source_id:
+                continue
+            references.append({
+                "source_id": str(source_id),
+                "citation_number": getattr(ref, "citation_number", None),
+                "cited_text": getattr(ref, "cited_text", None) or "",
+            })
+
+        print(json.dumps({"answer": result.answer, "references": references}))
 
     except FileNotFoundError:
         print(json.dumps({"error": "not_connected"}))
