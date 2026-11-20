@@ -83,6 +83,7 @@ interface ParsedIncident {
   people: string[]
   locations: string[]
   category: string
+  model_category?: string
   tags: string[]
   source_chunk: string
   verified: boolean
@@ -149,15 +150,17 @@ function parseResponse(text: string, category: string): (ParsedIncident & { cita
     const desc = fieldValue(block, 'DESCRIPTION')
     if (!desc) return []
     const dateRaw = fieldValue(block, 'DATE')
-    // Enforce fixed category — fall back to the extraction category key if model returned invalid
+    // File every incident under the category that was queried, so the extraction log's
+    // per-category counts match Browse. The model's own label is kept for reference.
     const rawCat = fieldValue(block, 'CATEGORY')
-    const resolvedCat = FIXED_CATEGORIES.includes(rawCat) ? rawCat : category
+    const modelCat = FIXED_CATEGORIES.includes(rawCat) ? rawCat : undefined
     return [{
       description: desc,
       date: { year: parseYear(dateRaw), period: dateRaw, precision: fieldValue(block, 'DATE_PRECISION') || 'unknown' },
       people: parseList(fieldValue(block, 'PEOPLE')),
       locations: parseList(fieldValue(block, 'LOCATIONS')),
-      category: resolvedCat,
+      category,
+      ...(modelCat && modelCat !== category ? { model_category: modelCat } : {}),
       tags: parseList(fieldValue(block, 'TAGS')),
       source_chunk: fieldValue(block, 'SOURCE_CHUNK'),
       verified: false,

@@ -1,0 +1,11 @@
+# Never upload local secrets — production env vars are set in the Vercel dashboard.
+.env
+.env.*
+.env*.local
+
+# Local build output / dependencies (Vercel installs and builds itself)
+.next
+node_modules
+.venv
+venv
+tsconfig.tsbuildinfo
