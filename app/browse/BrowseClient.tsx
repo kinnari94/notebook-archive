@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import IncidentCard from '@/components/IncidentCard'
 import BKStoryCard from '@/components/BKStoryCard'
+import SourceFilter, { type SourceNotebook } from '@/components/SourceFilter'
 
 type Source = 'standard' | 'bapa_katha'
 
@@ -49,7 +50,7 @@ export default function BrowseClient() {
   const [searchPerson,    setSearchPerson]    = useState('')
   const [searchLocation,  setSearchLocation]  = useState('')
   const [srcFilter,       setSrcFilter]       = useState('')
-  const [sourceOptions,   setSourceOptions]   = useState<{ notebook_id: string; notebook_title: string; count: number }[]>([])
+  const [sourceOptions,   setSourceOptions]   = useState<SourceNotebook[]>([])
   const [yearFrom,        setYearFrom]        = useState('')
   const [yearTo,          setYearTo]          = useState('')
   const [sortSequence,    setSortSequence]    = useState<'asc' | 'desc'>('asc')
@@ -180,9 +181,16 @@ export default function BrowseClient() {
 
   const hasActiveFilters = selectedCategory || searchKeyword || searchPerson || searchLocation || yearFrom || yearTo || selectedTags.length > 0 || srcFilter
 
-  const srcFilterLabel = useMemo(
-    () => sourceOptions.find(nb => srcFilter === `nb:${nb.notebook_id}`)?.notebook_title || (srcFilter ? 'Selected source' : ''),
-    [srcFilter, sourceOptions])
+  // "Param Satsang (2026)" for a notebook, "Param Satsang (2026) › English subs only Subs Jan 14.26" for a transcript.
+  const srcFilterLabel = useMemo(() => {
+    if (!srcFilter) return ''
+    for (const nb of sourceOptions) {
+      if (srcFilter === `nb:${nb.notebook_id}`) return nb.notebook_title
+      const t = nb.sources.find(s => srcFilter === `src:${s.id}`)
+      if (t) return `${nb.notebook_title} › ${t.title}`
+    }
+    return 'Selected source'
+  }, [srcFilter, sourceOptions])
 
   return (
     <div className="min-h-screen bg-[#faf8f5] text-[#1c1917] pb-24 px-4 sm:px-6 lg:px-8 pt-8">
@@ -305,19 +313,10 @@ export default function BrowseClient() {
               </div>
             </div>
 
-            {/* Source (notebook) */}
+            {/* Source (notebook › transcript) */}
             <div className="flex flex-col gap-1">
               <label className="text-[11px] font-bold text-stone-500 tracking-wide uppercase">Source Name</label>
-              <div className="relative">
-                <select value={srcFilter} onChange={e => setSrcFilter(e.target.value)} title={srcFilterLabel || 'All sources'}
-                  className="w-full bg-[#fcfbfa] text-[#1c1917] rounded-lg px-3 py-2 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#1C3D27] appearance-none pr-8 border border-[#E9E4DF] truncate">
-                  <option value="">All Sources</option>
-                  {sourceOptions.map(nb => (
-                    <option key={nb.notebook_id} value={`nb:${nb.notebook_id}`}>{nb.notebook_title} ({nb.count})</option>
-                  ))}
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-2.5 top-2.5 w-3.5 h-3.5 text-stone-400" />
-              </div>
+              <SourceFilter value={srcFilter} onChange={setSrcFilter} notebooks={sourceOptions} label={srcFilterLabel} />
             </div>
 
             {/* Year range */}

@@ -406,18 +406,51 @@ export interface SourceOption {
   notebook_id: string
   notebook_title: string
   count: number
+  /** Transcripts inside the notebook that incidents link to, with counts. */
+  sources: { id: string; title: string; count: number }[]
 }
 
-/** Notebooks that incidents (or BK stories) came from, with counts — for the Source filter. */
+/** Notebooks (and their transcripts) that incidents or BK stories came from — for the Source filter. */
 export async function getSourceOptions(source: 'standard' | 'bapa_katha' = 'standard'): Promise<SourceOption[]> {
   const db = await getDb()
-  const col = db.collection(source === 'bapa_katha' ? COLLECTIONS.bk_stories : COLLECTIONS.incidents)
-  const rows = await col.aggregate([
-    { $match: { source_notebook: { $exists: true, $ne: null } } },
-    { $group: { _id: '$source_notebook', title: { $first: '$source_notebook_title' }, count: { $sum: 1 } } },
-  ]).toArray()
-  return rows
-    .map(r => ({ notebook_id: String(r._id), notebook_title: (r.title as string) || String(r._id), count: r.count as number }))
+  const isBk = source === 'bapa_katha'
+  const col = db.collection(isBk ? COLLECTIONS.bk_stories : COLLECTIONS.incidents)
+
+  const [notebooks, transcripts] = await Promise.all([
+    col.aggregate([
+      { $match: { source_notebook: { $exists: true, $ne: null } } },
+      { $group: { _id: '$source_notebook', title: { $first: '$source_notebook_title' }, count: { $sum: 1 } } },
+    ]).toArray(),
+    // BK stories store one source_id each; incidents can link several transcripts
+    // (copies of the same talk), so each linked transcript is counted once per incident.
+    col.aggregate(isBk
+      ? [
+          { $match: { source_id: { $exists: true, $ne: null } } },
+          { $group: { _id: { nb: '$source_notebook', id: '$source_id' }, title: { $first: '$source_title' }, count: { $sum: 1 } } },
+        ]
+      : [
+          { $unwind: '$nlm_source_links' },
+          { $group: { _id: { nb: '$source_notebook', id: '$nlm_source_links.source_id', doc: '$_id' }, title: { $first: '$nlm_source_links.source_title' } } },
+          { $group: { _id: { nb: '$_id.nb', id: '$_id.id' }, title: { $first: '$title' }, count: { $sum: 1 } } },
+        ]
+    ).toArray(),
+  ])
+
+  const byNotebook = new Map<string, SourceOption['sources']>()
+  for (const t of transcripts) {
+    if (!t.title) continue
+    const nb = String(t._id.nb)
+    if (!byNotebook.has(nb)) byNotebook.set(nb, [])
+    byNotebook.get(nb)!.push({ id: String(t._id.id), title: String(t.title).replace(/(\.mp4)?\.txt$/i, ''), count: t.count as number })
+  }
+
+  return notebooks
+    .map(r => ({
+      notebook_id: String(r._id),
+      notebook_title: (r.title as string) || String(r._id),
+      count: r.count as number,
+      sources: (byNotebook.get(String(r._id)) || []).sort((a, b) => a.title.localeCompare(b.title, undefined, { numeric: true })),
+    }))
     .sort((a, b) => a.notebook_title.localeCompare(b.notebook_title, undefined, { numeric: true }))
 }
 
